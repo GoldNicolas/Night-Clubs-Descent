@@ -25,8 +25,8 @@ Apply this on top of the game's `FPS-Agent-Constraints.md` **v1.1**. Together th
   - the FPS-Agent log line `Combat: ready ... mobility=walk` shows the tag;
   - its eval JSON has `"mobility": "walk"`.
 
-## 3. Using a `full` snapshot with crouch and jump dropped
-This was measured for S1: the `full` snapshot `S1-20261113-L009` cleared **77.5%** with crouch and jump masked (40 episodes, level 1, local check), against 76% unmasked (200 episodes, cluster gate). It barely uses them, so it works as a stand-in. Prefer a `walk` snapshot once one is promoted.
+## 3. Use a `walk` snapshot; a `full` one is not a stand-in
+With crouch and jump masked, the `full` S1 snapshot `S1-20261113-L009` drops from 76% to **62%** clear (200-episode cluster gate, L-011): it relied on them. (An earlier 40-episode local check had suggested 77.5%; the sample was too small.) The first `walk` snapshot is **`run-S1-walk-20261114-152929`**: 73.0% clear, 25% accuracy, 34% headshots, 14.8 s per clear. Use `walk` snapshots in the game.
 
 ## 4. Changes to v1.1 sections
 - **§1.1 stage capability matrix:** the Crouch and Jump outputs are additionally dropped for `walk` snapshots, at every stage.

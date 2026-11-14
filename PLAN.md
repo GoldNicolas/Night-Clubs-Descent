@@ -64,7 +64,7 @@ Documented model status in the companion file, as of November 13, 2026:
 | Stage | Intended capability | Documented state | Use in this game |
 |---|---|---|---|
 | S0 | Stationary learner aims and shoots stationary targets | Trained and promoted, 98.5% clear | Initial snapshot/loading and shooting integration checks |
-| S1 | Learner movement, moving targets, cover, footstep hearing | **Promoted 2026-11-13:** `run-S1-20261113-L009` (`full` line), 76% clear at level 1 against the scripted reference's 85%; clears are slower (17.6 s vs 9.7 s), 30% accuracy. With crouch and jump masked it still clears 77.5%. A `walk`-line S1 run (`S1-walk-…`) is training next. | Moving-target and movement integration. Use the `walk` snapshot once promoted; until then, the `full` one with crouch and jump dropped. |
+| S1 | Learner movement, moving targets, cover, footstep hearing | **Promoted 2026-11-13:** `run-S1-20261113-L009` (`full` line), 76% clear at level 1 against the scripted reference's 85%; clears are slower (17.6 s vs 9.7 s), 30% accuracy. With crouch and jump masked it drops to 62%, so it is **not** a stand-in. **The game's snapshot is the walk line: `run-S1-walk-20261114-152929`** (promoted 2026-11-14: 73.0% clear, 25% accuracy, 34% headshots, 14.8 s per clear). More walk training is running (FPS-Agent L-012). | Moving-target and movement integration, using the latest promoted `walk` snapshot |
 | S2 | Enemies shoot back; damage and cover use | Planned | Required validation for normal combat where the player attacks the agents |
 | S3 | Searching and hunting across maps | Planned | Intended dependency for reliable enemies across procedural room networks |
 
