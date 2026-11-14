@@ -2,6 +2,8 @@
 
 **Contract version 1.1 (game copy).** Written 2026-11-13 from FPS-Agent commit `b802737` (Linux build `build-0eef702`). It is valid for every snapshot trained with observation/action layout v1. That layout has been frozen since build A (decisions D-023, D-028) and is shared by all curriculum stages S0–S3.
 
+**Read [FPS-Agent-Constraints-v1.2-addendum.md](FPS-Agent-Constraints-v1.2-addendum.md) together with this file.** It adds the mobility lines (the game uses `walk`: no crouch, no jump), and the two files together are **contract v1.2**.
+
 **This copy is the one the game maintains.** It supersedes `FPS-Agent/docs/FPS-Agent-Constraints.md` (v1). Changes in 1.1:
 - §1.1 adds the stage capability matrix (which inputs and outputs a snapshot was actually trained with).
 - §3 corrects which `Curriculum.*` overrides matter at deployment.
@@ -80,6 +82,7 @@ The layout is the same in every stage, but an early-stage snapshot was trained w
 
 - The run report (`docs/runs/<run-id>.md` in FPS-Agent) names the stage and the `-Set` string, and the user supplies it with the snapshot.
 - An **S0 enemy is a stationary turret**. It is useful for integration tests, not as a gameplay enemy.
+- **Mobility lines (v1.2 addendum):** for `walk` snapshots (and `static`), also drop the Crouch and Jump outputs, at every stage.
 
 ---
 

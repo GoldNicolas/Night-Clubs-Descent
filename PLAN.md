@@ -13,6 +13,7 @@ Read **[FPS-Agent-Constraints.md](FPS-Agent-Constraints.md)** before designing o
 - **This repository's copy is the authoritative one for the game**: contract **version 1.1**, November 13, 2026, based on FPS-Agent commit `b802737` and build `build-0eef702`.
 - The copy in the FPS-Agent repository (`docs/FPS-Agent-Constraints.md`) is an older v1 reference. Don't use it.
 - Version 1.1 adds the **stage capability matrix** (§1.1), which says which inputs and outputs each snapshot stage was actually trained with.
+- **[FPS-Agent-Constraints-v1.2-addendum.md](FPS-Agent-Constraints-v1.2-addendum.md)** applies on top of v1.1; together they are **contract v1.2** (2026-11-14). It adds the **mobility lines**: `static`, `walk` and `full`. **The game's enemies use the `walk` line**: they move, walk, aim, fire and reload, but never crouch or jump. Run IDs carry the tag, for example `S1-walk-<date>-<jobid>`.
 - If FPS-Agent changes its observation/action layout or mechanics, the user brings a new version, and it replaces this file.
 
 The companion document is the authority for exact observation/action schemas, mechanics, collision rules, timing, snapshot compatibility, and integration acceptance checks. This plan summarizes their design consequences; it does not replace them.
@@ -63,7 +64,7 @@ Documented model status in the companion file, as of November 13, 2026:
 | Stage | Intended capability | Documented state | Use in this game |
 |---|---|---|---|
 | S0 | Stationary learner aims and shoots stationary targets | Trained and promoted, 98.5% clear | Initial snapshot/loading and shooting integration checks |
-| S1 | Learner movement, moving targets, cover, footstep hearing | Build B shipped; training next | Moving-target and movement integration once a suitable snapshot is promoted |
+| S1 | Learner movement, moving targets, cover, footstep hearing | **Promoted 2026-11-13:** `run-S1-20261113-L009` (`full` line), 76% clear at level 1 against the scripted reference's 85%; clears are slower (17.6 s vs 9.7 s), 30% accuracy. With crouch and jump masked it still clears 77.5%. A `walk`-line S1 run (`S1-walk-…`) is training next. | Moving-target and movement integration. Use the `walk` snapshot once promoted; until then, the `full` one with crouch and jump dropped. |
 | S2 | Enemies shoot back; damage and cover use | Planned | Required validation for normal combat where the player attacks the agents |
 | S3 | Searching and hunting across maps | Planned | Intended dependency for reliable enemies across procedural room networks |
 
@@ -88,7 +89,8 @@ FPS-Agent is a separate private repository on the same machine (`C:/Users/ng440/
   - Keep the schema code byte-identical.
 - **Snapshots.** Each snapshot is a folder of `encoder.bin`, `policy.bin` and `decoder.bin`, plus its run report (stage, `-Set`, eval results) and `SHA256SUMS`. The user hands them over.
   - The first available one is the promoted S0 snapshot `run-S0-20261112-152039`. It is a GitHub release of FPS-Agent, with a local copy at `FPS-Agent/Game/FPSAgent/Saved/Snapshots/run-S0-20261112-152039`.
-  - Copy snapshots into this repo under `Content/AgentModels/<run-id>/`, or bake them into network assets, and register each in a **model registry**: a data asset holding run id, stage, `T`, movement on/off, which senses to feed, checksums and contract version.
+  - Copy snapshots into this repo under `Content/AgentModels/<run-id>/`, or bake them into network assets, and register each in a **model registry**: a data asset holding run id, stage, **mobility** (`static`, `walk` or `full`; drop Crouch and Jump unless `full`), `T`, which senses to feed, checksums and contract version.
+  - The S1 snapshot is also available: `run-S1-20261113-L009` (`full`), with a local copy at `FPS-Agent/Game/FPSAgent/Saved/Snapshots/run-S1-20261113-L009`. Future game snapshots are `run-<stage>-walk-…`.
 - **Requests to FPS-Agent** go through the user. Likely ones:
   1. Promoted S1, S2 and S3 snapshots as they become available.
   2. **Training on this game's layouts:** export generated maps in FPS-Agent's map format v1 (section 8.1), so its S3 stage can train on the same kind of spaces the game generates. This is the strongest fix for "new tunnel layouts differ from training".
@@ -364,7 +366,7 @@ A recommended starting point is not a user-approved final decision. Resolve the 
 
 ## 14. Handoff guidance
 
-This PLAN.md and [FPS-Agent-Constraints.md](FPS-Agent-Constraints.md) (v1.1) live together in this repository. Read both.
+This PLAN.md, [FPS-Agent-Constraints.md](FPS-Agent-Constraints.md) (v1.1) and [FPS-Agent-Constraints-v1.2-addendum.md](FPS-Agent-Constraints-v1.2-addendum.md) live together in this repository. Read all three; together the two contract files are contract v1.2.
 
 The implementing project should first establish the selected model's run report, stage, compatible runtime source, required overrides, and packaging approach. Preserve a small integration scene for comparing model versions and diagnosing perception/action problems.
 
