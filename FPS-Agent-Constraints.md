@@ -1,6 +1,12 @@
 # FPS-Agent Constraints: what a game must provide to host the trained combat agent
 
-**Contract version 1.** Written 2026-11-13 from FPS-Agent commit `b802737` (Linux build `build-0eef702`). It is valid for every snapshot trained with observation/action layout v1. That layout has been frozen since build A (decisions D-023, D-028) and is shared by all curriculum stages S0–S3.
+**Contract version 1.1 (game copy).** Written 2026-11-13 from FPS-Agent commit `b802737` (Linux build `build-0eef702`). It is valid for every snapshot trained with observation/action layout v1. That layout has been frozen since build A (decisions D-023, D-028) and is shared by all curriculum stages S0–S3.
+
+**This copy is the one the game maintains.** It supersedes `FPS-Agent/docs/FPS-Agent-Constraints.md` (v1). Changes in 1.1:
+- §1.1 adds the stage capability matrix (which inputs and outputs a snapshot was actually trained with).
+- §3 corrects which `Curriculum.*` overrides matter at deployment.
+
+If FPS-Agent ever changes the observation/action layout or the mechanics, the user brings a new version from FPS-Agent, and it replaces this file.
 
 **Who reads this.** An AI coding agent building a full Unreal Engine game into which the FPS-Agent policy will be dropped as enemy bots. FPS-Agent is a separate, private ML project. The game must adapt to the agent; the agent will not adapt to the game.
 
@@ -62,6 +68,19 @@ The **player** is the enemy and may differ from the training bots, but only insi
 
   The game MUST NOT feed the agent anything else. A "wallhack" is only possible by breaking this contract, and it would also be out of distribution.
 
+### 1.1 Stage capability matrix (MUST: gate inputs and outputs by the snapshot's stage)
+The layout is the same in every stage, but an early-stage snapshot was trained with some outputs **ignored** and some inputs **always empty**. Its network produces values for those slots that mean nothing. The game MUST reproduce the training situation of the deployed snapshot's stage:
+
+| Snapshot | Move / Crouch / Walk / Jump outputs | `Sounds` input | `Hit` input | Episode time limit `T` (§12) |
+|---|---|---|---|---|
+| **S0** (default settings) | **Ignore them**: the agent stands still; aim, fire and reload only | **Always empty** (S0 bots made no sound) | **Always absent** | 20 s |
+| **S0 with movement** (`-Set="Curriculum.S0.bAgentCanMove=true;Curriculum.S0.TimeLimitSeconds=30"`, FPS-Agent request L-008) | Apply | Always empty | Always absent | 30 s (from the `-Set`) |
+| **S1** | Apply | **Enemy footsteps only.** S1 bots never shot, so feed no gunshot events. | **Always absent** (S1 bots never shot) | 30 s |
+| **S2, S3** | Apply | Footsteps and gunshots | Per §9.4 | From the run report |
+
+- The run report (`docs/runs/<run-id>.md` in FPS-Agent) names the stage and the `-Set` string, and the user supplies it with the snapshot.
+- An **S0 enemy is a stationary turret**. It is useful for integration tests, not as a gameplay enemy.
+
 ---
 
 ## 2. Engine, plugin and build requirements
@@ -88,7 +107,10 @@ The **player** is the enemy and may differ from the training bots, but only insi
      - the `-Set=` override string the run used (see below);
      - the eval clear rate.
 2. **The settings overrides.** Every override in a run's `-Set` string that touches `Movement.*`, `Body.*`, `Rifle.*`, `Health.*`, `Combat.Perception.*`, `Bots.*` (hearing rules) or `Combat.Ppo.HiddenLayers/HiddenSize/MemorySize` **MUST be replicated in the game**.
-   - Overrides of `Combat.Reward.*`, other `Combat.Ppo.*` and `Curriculum.*` are training-only; ignore them.
+   - Two `Curriculum.*` overrides **do** matter at deployment:
+     - `Curriculum.<stage>.bAgentCanMove` decides whether movement outputs are applied (§1.1);
+     - `Curriculum.<stage>.TimeLimitSeconds` is the `T` of §12.
+   - Overrides of `Combat.Reward.*`, other `Combat.Ppo.*` and every other `Curriculum.*` value are training-only; ignore them.
    - FPS-Agent has no `.ini` overrides: the code defaults in `FPSAgentTypes.h` are the trained values, and they are the numbers in this document.
 3. **Source code** to copy (section 17). The observation and action **schema code MUST be copied verbatim**. The network's compatibility hash is computed from the schema, so any difference in element names, sizes, order or encoder parameters makes the snapshot unusable or silently wrong.
 
@@ -268,7 +290,7 @@ The game MUST emit sound events for each enemy (player) as follows:
 | Kind | When | Hearing radius |
 |---|---|---|
 | **Footstep** | While **audible movement**: `!crouched && !walkMode && horizontalSpeed > 315` cm/s (1.05 × 300). One event every **0.35 s** while the condition holds. | **1500** cm (15 m) |
-| **Gunshot** | One event **per bullet fired** (every shot, including misses). Bots don't shoot before S2, so enemy gunshots only carry learned meaning in **S2+ snapshots**; emit them anyway. | **4000** cm (40 m) |
+| **Gunshot** | One event **per bullet fired** (every shot, including misses). Bots don't shoot before S2, so **feed gunshots only to S2+ snapshots** (§1.1). Emit the events in every case; just don't put them in an earlier snapshot's input. | **4000** cm (40 m) |
 
 - **Event fields:**
   - `Position`: the source actor's location (capsule centre);
@@ -409,6 +431,7 @@ The action is one Learning Agents **struct** named `"Combat"`:
 - The priors are part of the schema: copy `UCombatInteractor` verbatim.
 - Bool actions and the trigger are applied **at the decision**. Aim and Move are applied **every frame** until the next decision.
 - A dead agent ignores actions.
+- For snapshots whose stage doesn't move (§1.1), drop Move, Crouch, Walk and Jump, as training did. The agent keeps standing, uncrouched.
 
 ---
 
@@ -465,7 +488,7 @@ The agent never experienced life after a clear, or beyond the time limit. The ga
    - tracks, sound memory and hit indicator cleared;
    - **`Manager->ResetAgents({id})`**;
    - virtual episode start `E = now`.
-2. **Time left:** `clamp(1 − (now − E) / T, 0, 1)`, where `T` is the time limit of the snapshot's stage.
+2. **Time left:** `clamp(1 − (now − E) / T, 0, 1)`, where `T` is the snapshot's time limit from §1.1, including any `TimeLimitSeconds` override in its `-Set`.
 3. **Start a new virtual episode** (`E = now` plus `ResetAgents`) when:
    - (a) the player respawns or a new round or wave starts, since the agent's previous enemies are all dead, which in training meant the episode had ended;
    - (b) time left has reached 0 **and** the agent currently tracks no enemy (no "visible" or "remembered" track).
@@ -579,6 +602,7 @@ FPS-Agent docs worth reading alongside this one:
 ## 18. Quick checklist
 - [ ] UE 5.7, C++, Learning Agents enabled; `Weapon` trace channel = GameTraceChannel1, default Block.
 - [ ] Snapshot (encoder, policy, decoder) from release `run-<id>`, SHA verified; stage and `-Set` read from its run report.
+- [ ] Inputs and outputs gated by the snapshot's stage (§1.1): S0 ignores movement outputs; Sounds are empty in S0; no gunshots before S2; no Hit before S2.
 - [ ] Interactor schema copied verbatim; policy settings 2 × 256, GRU 128, ELU; load-time size and hash check.
 - [ ] One manager and policy; `RunInference(0)` once per decision for all agents; `ResetAgents` on spawn and on a new virtual episode.
 - [ ] 15 Hz decision clock on game time; Aim integrated at 720°/s × Aim every frame; Move applied every frame; CharacterMovement max sim step 1/60.

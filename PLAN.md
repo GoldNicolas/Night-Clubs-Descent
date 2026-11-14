@@ -1,6 +1,6 @@
 # UE5 Game Master Plan
 
-**Status:** Initial planning draft; no game implementation is implied.
+**Status:** Initial planning draft; no game implementation is implied. Revised November 13, 2026 against FPS-Agent-Constraints v1.1. The revision adds stage gating, the FPS-Agent working rules, the map format, and concrete ragdoll, crowd and stealth rules.
 **Written:** November 13, 2026.
 **Game title:** Undecided.
 
@@ -8,12 +8,12 @@ This plan records the game concept, proposed architecture, development order, an
 
 ## 1. Required companion document
 
-Read **FPS-Agent-Constraints.md** alongside this plan before designing or implementing enemy integration.
+Read **[FPS-Agent-Constraints.md](FPS-Agent-Constraints.md)** before designing or implementing enemy integration. It sits next to this plan in the game repository.
 
-- Original location: C:/Users/ng440/Desktop/FPS-Agent/docs/FPS-Agent-Constraints.md
-- Local link from this Desktop plan: [FPS-Agent-Constraints.md](FPS-Agent/docs/FPS-Agent-Constraints.md)
-- The user will also provide that Markdown file separately when handing this plan to another project or coding agent.
-- This draft references contract version 1, dated November 13, 2026, based on FPS-Agent commit b802737 and build-0eef702.
+- **This repository's copy is the authoritative one for the game**: contract **version 1.1**, November 13, 2026, based on FPS-Agent commit `b802737` and build `build-0eef702`.
+- The copy in the FPS-Agent repository (`docs/FPS-Agent-Constraints.md`) is an older v1 reference. Don't use it.
+- Version 1.1 adds the **stage capability matrix** (§1.1), which says which inputs and outputs each snapshot stage was actually trained with.
+- If FPS-Agent changes its observation/action layout or mechanics, the user brings a new version, and it replaces this file.
 
 The companion document is the authority for exact observation/action schemas, mechanics, collision rules, timing, snapshot compatibility, and integration acceptance checks. This plan summarizes their design consequences; it does not replace them.
 
@@ -69,9 +69,30 @@ Documented model status in the companion file, as of November 13, 2026:
 
 S0 is not a complete gameplay enemy. S1 does not establish competent response to incoming fire. S3 is an intended capability milestone, not a guarantee that a new tunnel layout will work without evaluation.
 
+**Stage gating is mandatory (companion §1.1).** The Agent Director reads the deployed snapshot's stage and `-Set` string from its run report, and gates inputs and outputs to match what that stage trained with:
+- **S0:** an S0 snapshot never learned to move: its Move, Crouch, Walk and Jump outputs were ignored in training and are meaningless. It runs as a **stationary turret**, with an empty Sounds set and no Hit input.
+- **S1:** S1 snapshots hear footsteps only. They get no gunshot sounds and no Hit input.
+- **S2+:** everything is fed.
+
+This is a per-snapshot setting in the game's model registry (section 4.1), not a code fork.
+
 The final game should target validated S2/S3 behavior. Development can proceed with small integration scenes and temporary scripted stand-ins, clearly identified as placeholders. Do not claim stand-in performance as evidence of learned behavior.
 
 Training remains in FPS-Agent. Normal gameplay uses local inference; it does not need the Python PPO trainer or the cluster.
+
+### 4.1 Working with the FPS-Agent project
+FPS-Agent is a separate private repository on the same machine (`C:/Users/ng440/Desktop/FPS-Agent`). This game project only ever talks to it **through the user**.
+
+- **Read-only access.** This project MAY read FPS-Agent's files to vendor the runtime sources listed in companion §17, and SHOULD pin them to a recorded FPS-Agent commit. It MUST NOT modify, build, commit to or run anything in FPS-Agent.
+  - Vendor into a game module such as `Source/AgentRuntime/ThirdParty/FPSAgent/`, with a `VENDORED.md` recording the commit and the local changes. The allowed changes are the export macro, the `TaskOf` glue, the ally ignore-list on the rifle trace, and the stage gating.
+  - Keep the schema code byte-identical.
+- **Snapshots.** Each snapshot is a folder of `encoder.bin`, `policy.bin` and `decoder.bin`, plus its run report (stage, `-Set`, eval results) and `SHA256SUMS`. The user hands them over.
+  - The first available one is the promoted S0 snapshot `run-S0-20261112-152039`. It is a GitHub release of FPS-Agent, with a local copy at `FPS-Agent/Game/FPSAgent/Saved/Snapshots/run-S0-20261112-152039`.
+  - Copy snapshots into this repo under `Content/AgentModels/<run-id>/`, or bake them into network assets, and register each in a **model registry**: a data asset holding run id, stage, `T`, movement on/off, which senses to feed, checksums and contract version.
+- **Requests to FPS-Agent** go through the user. Likely ones:
+  1. Promoted S1, S2 and S3 snapshots as they become available.
+  2. **Training on this game's layouts:** export generated maps in FPS-Agent's map format v1 (section 8.1), so its S3 stage can train on the same kind of spaces the game generates. This is the strongest fix for "new tunnel layouts differ from training".
+  3. Any change to enemy mechanics, senses or abilities, which requires retraining (companion §15).
 
 ## 5. Proposed runtime architecture
 
@@ -124,6 +145,8 @@ Use the exact definitions and source manifest in the companion document, includi
 - Keep inference, perception, sound events, and authoritative hitscan on game authority. In single-player, that is the local authoritative world.
 - Use exact trained enemy body, movement, health, armor, rifle, spread, recoil, and reload behavior.
 - Preserve visibility, geometry probes, last-seen memory, footsteps, gunshots, and hit-indicator rules.
+- Gate inputs and outputs per snapshot stage (companion §1.1): no movement outputs for S0, no gunshots or Hit before S2.
+- The enemy pawn must be possessed by an AI controller, because CharacterMovement only simulates controlled pawns. Pooled or reused pawns must get the full spawn reset of companion §12, including `ResetAgents`.
 
 The observation contract includes Self (15 values), Rays (72), up to five Enemy records, an optional Hit record, and up to four Sound records. Its matching actions provide Move, Aim, Fire, Reload, Crouch, Walk, and Jump.
 
@@ -141,6 +164,11 @@ Five enemy records per policy does not mean five agent NPCs in the game. Each ag
 - Player speed near the trained target range, initially around 540 cm/s and within the contract's 600 cm/s ceiling.
 - Player head/body proportions and hit zones aligned with the agent's target expectations.
 - One player weapon for the first combat slice; the full player arsenal remains open.
+- **Player sounds are a gameplay mechanic.** Agents hear the player's footsteps within 15 m whenever the player runs faster than 315 cm/s, not crouched and not in walk mode. From S2+ snapshots they also hear the player's gunshots within 40 m.
+  - A **walk/silent-move key** (300 cm/s) and crouch (190 cm/s) give the player real stealth against agents.
+  - Club music and crowd noise do **not** mask the player: agent hearing ignores all presentation audio.
+- **Player hitboxes** SHOULD be the same primitive set as the agent body: a 12 cm head sphere centred at 158 cm standing and 102 cm crouched, plus body and leg boxes (companion §6.1, §7.3). Agents then aim at exactly what they learned to aim at.
+- **"Hotline Miami energy" comes from lethality, pacing and feedback, not from extra speed.** Keep player top speed at about 540 cm/s. One-hit-kill player weapons, fast respawns and dense encounters fit the contract; speed boosts beyond 600 cm/s do not.
 - Clear hit, kill, and incoming-damage feedback, with effects that preserve target readability.
 
 The player does not have to use the enemy's exact rifle, but new player weapons and perks still need gameplay evaluation against the model. The enemy's own rifle and physical rules remain fixed by the contract.
@@ -154,6 +182,13 @@ Dashes, slides, teleportation, wall-running, extreme speed boosts, and other unf
 ## 8. Procedural tunnel and nightclub maps
 
 **Proposed:** Generate a gameplay blockout first, then dress it with a modular tunnel/club art kit.
+
+**Setting versus contract:** the real Las Vegas flood tunnels are narrow, low concrete culverts, about 3 m wide and under 3 m tall. Agents trained on open-sky spaces with 4 m+ corridors. The game's tunnels MUST therefore be stylized:
+- **Width:** gameplay corridors at least 4 m wide, preferably 8 m (two tiles).
+- **Height:** tall vaults or open shafts.
+- **Ceilings:** on the ceiling channel described below.
+
+Club rooms carry most of the combat. The narrow "real" culvert look can appear as non-walkable set dressing behind the playable space.
 
 The structural generator should provide:
 
@@ -172,6 +207,29 @@ The model does not use a navmesh. A generator-side connectivity check is still u
 
 Do not place overhead walkways, stacked tunnels, accessible balconies above combat areas, or overlapping playable floors in the initial generator.
 
+### 8.1 Structural layout format (proposed: FPS-Agent map format v1)
+The structural generator SHOULD output its layout in FPS-Agent's **map format v1**, or something trivially convertible to it. The art kit is then placed on top. This gives three things:
+- a layout language the agents already know;
+- a compatibility check;
+- maps FPS-Agent can train S3 on (section 4.1).
+
+**Format v1:**
+- **Grids.** Three equal-size character grids, `tiles`, `heights` and `zones`, plus `tile_cm 400`, `level_cm 100` and `wall_cm 600`.
+- **Coordinates.** Row 0 is north (+X), column 0 is west (+Y points east). The centre of tile (r, c) is at `X=(rows−1−r+0.5)·400`, `Y=(c+0.5)·400`.
+- **`tiles` characters:**
+  - `.` floor;
+  - `#` wall (6 m);
+  - `l` low cover (120 cm);
+  - `h` high cover (250 cm);
+  - `x` void;
+  - `^ v > <` a ramp rising one level (1 m) to the north, south, east or west over one tile.
+- **`heights`.** Floor level `0`–`9`, in 1 m steps. For a ramp, the level of its low end. A 1 m step can't be jumped (the jump apex is about 90 cm), so ramps are the only way up. Drops are one-way.
+- **`zones`.** `a` and `d` are spawn zones, `A`, `B` and `C` are sites, `m` is mid, and `.` is none. The game MAY reuse `a`/`d` as player and enemy spawn candidates.
+- **Validation.** FPS-Agent's `tools/mapgen` checks 8 rules, including connectivity, cover/ramp consistency and spawn reachability. The game SHOULD reimplement a connectivity check over the same rules: ramps connect levels, drops are one-way, walls and cover block.
+- **Reference map.** `map01` is 30 × 30 tiles (120 × 120 m).
+
+Ceilings, tunnels and club dressing are layered on afterwards, as art plus the ceiling collision channel. They never change the structural grid.
+
 Keep real walls and cover visible to both weapon traces and agent perception. Do not make required cover cosmetic. Avoid bulletproof transparent glass, opaque bullet penetration, and moving/destructible geometry as core mechanics until separately evaluated.
 
 Possible decoration, not new lore: tunnel concrete, pipes, club lighting, dance floors, DJ equipment, temporary barriers, booths, cables, litter, and mob-occupied club dressing. The art kit can vary visually while preserving readable gameplay collision.
@@ -183,13 +241,30 @@ Possible decoration, not new lore: tunnel concrete, pipes, club lighting, dance 
 - Use stylized character meshes over the compatible enemy body and primitive hitboxes.
 - Agent animation must not move the authoritative eye or hitboxes. Keep visible silhouettes reasonably aligned with where shots count.
 - Darkness, fog, strobes, and smoke effects do not automatically hide the player from geometric perception.
+  - Agents see the player in a pitch-black club exactly as in daylight.
+  - Any "hide in the dark/smoke" mechanic MUST be an explicit extra visibility test in the Agent Director, per companion §7.2: the player then counts as "not visible", which is in distribution.
+  - Never weaken line of sight by other means.
 - Nightclub music and ambient crowd/physics sounds are presentation audio. Agent hearing receives only the specified player footsteps/gunshots.
 - Keep pickups, small clutter, VFX, debris, dancers, and corpses out of agent geometry queries.
 - Dancers must not become invisible movement obstacles or unexplained bullet blockers for agents.
 
 **Proposed crowd baseline:** Ambient dancers are presentation actors outside the combat target lists, with no agent-blocking collision. Whether the player can harm them, whether they react to combat, and whether they affect scoring remain open. Do not add a civilian morality or lore system by assumption.
 
+**Crowd collision, concretely:**
+- **Capsules.** Dancer capsules are not on `WorldStatic`/`WorldDynamic`. They ignore agent capsules (the `AgentPawn` channel), and they ignore the `Weapon` channel for agent bullets.
+- **Consequence:** agents see and shoot **through** crowds. The player cannot use dancers as cover against agents. That is a design fact, not a bug. Whether the *player's* bullets hit dancers is a separate, open choice.
+
 On enemy death, stop inference/actions for that enemy, remove its active combat hitboxes, and enable the visual ragdoll. Configure corpse collision so it does not affect agent observations or absorb agent shots. Cosmetic physics interaction can be evaluated separately.
+
+**Ragdoll setup, concretely:**
+- **On death:**
+  - stop that agent's decisions (skip it in the Agent Director, or `RemoveAgent`);
+  - release the trigger;
+  - disable its primitive hitboxes and capsule collision;
+  - hide or keep the bean body as preferred;
+  - simulate physics on the **visual skeletal mesh only**.
+- **Ragdoll bodies** use object type **PhysicsBody**, never `WorldStatic`/`WorldDynamic`, and respond **Ignore** to `Weapon` and to agent capsules. Agents can't see them, can't be blocked by them and can't shoot into them.
+- **Respawning or reusing the pawn** gets the full companion §12 reset, including `ResetAgents`.
 
 Bound the number of active dancers, lights, ragdolls, and debris. Pooling, settling corpses, or cleanup rules are implementation options to choose after profiling.
 
@@ -202,6 +277,7 @@ Random spawning must be constrained:
 - Valid floor and capsule clearance.
 - At least 5 m from the player and preferably outside the player's view.
 - At least 4 m between agent spawn positions.
+- Facing away from the player at spawn, standing, pitch 0. That is closest to how training episodes began.
 - Only in loaded, connected gameplay areas.
 - Appropriate engagement distances, generally within about 40 m.
 - A measured active-enemy budget and staggered arrivals.
@@ -236,13 +312,18 @@ These are suggestions, not approved rules. Decide whether upgrades last only for
 
 Do not modify enemy speed, body, weapon, health model, or senses through a generic perk system. Player movement upgrades must also respect or explicitly revisit the target envelope.
 
+Contract-safe perk patterns:
+- **Global slow motion** (world time dilation) is safe: agents run entirely on game time, so their decisions, aim and movement slow down together. **Per-actor** time dilation on agents is not safe.
+- A **stealth or cloak** perk is safe when implemented in the Agent Director as an explicit "player not visible" result (companion §7.2), plus suppressing the player's sound events. Agents treat it like the player being behind cover or walking silently.
+- **Damage and survivability** perks on the player side (more health, armor, healing, damage dealt) don't touch the agent's inputs.
+
 ## 12. Development milestones and exit criteria
 
 These are future implementation and validation tasks, not work completed by this plan.
 
 | Milestone | Deliverable | Exit condition |
 |---|---|---|
-| 0. Runtime proof | UE5 C++ project, AgentRuntime integration, one plain test room, pinned S0 snapshot | Compatible snapshot loads; wrong model is rejected; golden observations and actions match; early packaged inference feasibility is checked |
+| 0. Runtime proof | UE5 C++ project; companion §17 sources vendored from a pinned FPS-Agent commit (section 4.1); model registry; one plain open-sky test room; the S0 snapshot `run-S0-20261112-152039` running as a stationary turret (stage gating on) | Compatible snapshot loads; wrong model is rejected; golden observation (companion §16 test 2) matches; the S0 turret kills a static dummy at 10–20 m; Development **and Shipping** packaged inference is checked early |
 | 1. Combat slice | Player movement/shooting, one enemy, damage, death, ragdoll, restart | Stationary-target integration works; running worsens player aim while firing remains possible; death fires one consistent kill event |
 | 2. Learned gameplay | Promoted S1/S2 models as available, hearing, moving targets, player return fire | Verify skills appropriate to each stage; establish a repeatable baseline before difficulty modifiers |
 | 3. Procedural encounters | Connected layouts, ceiling approach, valid spawns, multiple agents, Encounter Director | Generated spaces support reliable combat/navigation with suitable S2/S3 snapshots; agents ignore allies; clutter and ceilings do not corrupt perception |
@@ -283,7 +364,7 @@ A recommended starting point is not a user-approved final decision. Resolve the 
 
 ## 14. Handoff guidance
 
-Provide this PLAN.md and FPS-Agent-Constraints.md together.
+This PLAN.md and [FPS-Agent-Constraints.md](FPS-Agent-Constraints.md) (v1.1) live together in this repository. Read both.
 
 The implementing project should first establish the selected model's run report, stage, compatible runtime source, required overrides, and packaging approach. Preserve a small integration scene for comparing model versions and diagnosing perception/action problems.
 
