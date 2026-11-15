@@ -27,6 +27,8 @@ public:
 	bool IsReloading() const { return State.IsReloading(); }
 	float GetReloadSecondsLeft() const;
 	int32 GetAmmo() const { return State.Ammo; }
+	/** Game time of the last shot (music intensity). */
+	double GetLastShotTime() const { return State.LastShotTime; }
 	/** Cone half-angle the next shot would have right now (for the crosshair). */
 	float GetCurrentSpreadDegrees() const { return SpreadFor(State.ShotIndex); }
 

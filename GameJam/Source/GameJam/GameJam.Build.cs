@@ -20,10 +20,12 @@ public class GameJam : ModuleRules
 			"UMG",
 			"Slate",
 			"AgentRuntime",
+			"AudioMixer",
+			"DeveloperSettings",
 			"Niagara"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { "DeveloperSettings" });
+		PrivateDependencyModuleNames.AddRange(new string[] { });
 
 		// Editor-only tooling (GJEditorTools: Anim Blueprint graph edits). Not part of game builds.
 		if (Target.bBuildEditor)
@@ -39,7 +41,8 @@ public class GameJam : ModuleRules
 			"GameJam/Variant_Shooter/AI",
 			"GameJam/Variant_Shooter/UI",
 			"GameJam/Variant_Shooter/Weapons",
-			"GameJam/GJ"
+			"GameJam/GJ",
+			"GameJam/MapGen"
 		});
 
 		// Uncomment if you are using Slate UI

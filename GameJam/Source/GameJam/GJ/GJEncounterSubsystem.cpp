@@ -4,6 +4,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "EnemyBean.h"
+#include "GJMapGenerator.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
@@ -26,6 +27,7 @@ namespace
 	constexpr float MinPlayerDistance = 500.f;  // contract §12.5
 	constexpr float MinAgentDistance = 400.f;   // contract §12.5 / §8.5
 	constexpr float MaxPlayerDistance = 4000.f; // engagements within ~40 m (§7.5)
+	constexpr float MaxWalkDistanceM = 60.f;    // procedural maps: reachable within this walk (the 40 m straight-line rule still applies)
 }
 
 bool UGJEncounterSubsystem::ShouldCreateSubsystem(UObject* Outer) const
@@ -115,14 +117,36 @@ bool UGJEncounterSubsystem::TrySpawnOne()
 
 	FRandomStream Rng(static_cast<int32>(FPlatformTime::Cycles()));
 	const float Radius = FMath::Max(300.f, CVarSpawnRadius.GetValueOnGameThread());
+
+	// On a procedural map, probe floor tiles the player can walk to (MAPGEN.md): enemies never spawn in sealed-off pockets.
+	TArray<FVector> MapTiles;
+	if (const AGJMapGenerator* Map = AGJMapGenerator::Find(World); Map && Map->HasLayout())
+	{
+		Map->GetSpawnCandidates(Player->GetActorLocation(), MinPlayerDistance / 100.f, MaxWalkDistanceM, MapTiles);
+		if (MapTiles.IsEmpty())
+		{
+			return false;
+		}
+	}
+
 	bool bFound = false;
 	float BestScore = -1.e9f;
 	FVector Best = FVector::ZeroVector;
 	for (int32 Attempt = 0; Attempt < 48; ++Attempt)
 	{
-		const float A = Rng.FRandRange(0.f, 2.f * PI);
-		const float R = Radius * FMath::Sqrt(Rng.FRand());
-		const FVector Probe(Center.X + R * FMath::Cos(A), Center.Y + R * FMath::Sin(A), Center.Z);
+		FVector Probe;
+		if (!MapTiles.IsEmpty())
+		{
+			// A random point on a reachable tile, kept clear of the tile edge (walls and cover are whole tiles).
+			const FVector& Tile = MapTiles[Rng.RandRange(0, MapTiles.Num() - 1)];
+			Probe = Tile + FVector(Rng.FRandRange(-120.f, 120.f), Rng.FRandRange(-120.f, 120.f), 0.f);
+		}
+		else
+		{
+			const float A = Rng.FRandRange(0.f, 2.f * PI);
+			const float R = Radius * FMath::Sqrt(Rng.FRand());
+			Probe = FVector(Center.X + R * FMath::Cos(A), Center.Y + R * FMath::Sin(A), Center.Z);
+		}
 
 		// Floor below: the first walkable surface under the probe.
 		FHitResult Floor;
