@@ -5,6 +5,7 @@ Source files: C:/Users/Sebastian Ramos/AppData/Local/Temp/nc_gen/<Folder>/ (kept
 import unreal
 
 SRC = "C:/Users/Sebastian Ramos/AppData/Local/Temp/nc_gen"
+SRC_1K = SRC + "_1k"   # same layout, textures downscaled to 1024 px (keeps the repo / LFS small)
 DST = "/Game/ClubMap/Props"
 MASTER = "/Game/ClubMap/Materials/M_CM_GenPBR"
 # folder on disk -> asset name
@@ -63,13 +64,34 @@ def import_files(files, dest):
     return out
 
 
+FBX_EXTRAS = ["Image_0", "Image_1", "Image_2", "texture_0_metallic", "texture_0_roughness"]
+
+
+def cleanup_fbx_extras(dest, name, mi):
+    """The FBX import also brings in its embedded textures + a default material (~12 MB per prop, unused).
+    Merge Material_001 into our MI, resave the mesh, then delete the extras and the leftover redirector."""
+    m1 = dest + "/Material_001"
+    if EAL.does_asset_exist(m1):
+        EAL.consolidate_assets(mi, [unreal.load_asset(m1)])
+    for a in FBX_EXTRAS:
+        if EAL.does_asset_exist("%s/%s" % (dest, a)):
+            EAL.delete_asset("%s/%s" % (dest, a))
+    EAL.save_asset("%s/SM_Gen_%s" % (dest, name), only_if_is_dirty=False)
+    if EAL.does_asset_exist(m1):
+        EAL.delete_asset(m1)
+
+
 def import_prop(folder, name):
+    import os
     dest = "%s/%s" % (DST, name)
     base = "%s/%s" % (SRC, folder)
+    tbase = "%s/%s" % (SRC_1K, folder)
+    if not os.path.isdir(tbase):
+        tbase = base
     mesh_paths = import_files(["%s/SM_Gen_%s.fbx" % (base, name)], dest)
     tex = {}
     for kind, param in (("base_color", "BaseColorMap"), ("normal", "NormalMap"), ("roughness", "RoughnessMap"), ("metallic", "MetallicMap")):
-        p = import_files(["%s/T_Gen_%s_%s.png" % (base, name, kind)], dest)
+        p = import_files(["%s/T_Gen_%s_%s.png" % (tbase, name, kind)], dest)
         if p:
             t = unreal.load_asset(p[0].split(".")[0])
             if kind == "normal":
@@ -96,6 +118,7 @@ def import_prop(folder, name):
             m.set_editor_property("material_interface", mi)
         sm.set_editor_property("static_materials", mats)
         EAL.save_loaded_asset(sm)
+        cleanup_fbx_extras(dest, name, mi)
     return {"mesh": sm.get_path_name() if sm else None, "textures": len(tex), "slots": len(mats) if sm else 0}
 
 
