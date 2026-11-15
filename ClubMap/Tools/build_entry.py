@@ -235,8 +235,8 @@ def coat_check():
 def lounge_and_entrance():
     f = FE + "Lounge"
     # waiting lounge (north-west)
-    _prop("LoungeArmchair", (1010, -430, 95 * 0.45), f, yaw=90, s=0.45, coll="pawn")
-    _prop("LoungeArmchair", (1010, -120, 95 * 0.45), f, yaw=-90, s=0.45, coll="pawn")
+    _prop("LoungeArmchair", (1010, -430, 95 * 0.45), f, yaw=0, s=0.45, coll="pawn")
+    _prop("LoungeArmchair", (1010, -120, 95 * 0.45), f, yaw=180, s=0.45, coll="pawn")
     _prop("CoffeeTable", (1010, -275, 38 * 0.4), f, s=0.4, coll="pawn")
     _prop("Ashtray", (1030, -280, 76 * 0.4 + 95 * 0.06), f, s=0.06)
     _prop("PendantLight", (1010, -275, 600 - 20 - 95 * 0.38), f, s=0.38)

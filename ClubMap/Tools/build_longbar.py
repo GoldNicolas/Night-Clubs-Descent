@@ -1,7 +1,7 @@
 """Long Bar (2x5 tiles) west of the Main Dance Hall: an upscale gold/amber cocktail lane.
 Run with include=[cm_kit.py, dress_dance_hall.py, dress_variety.py, build_lighting_fx.py, this file], then build_longbar().
 
-Layout (cm): room x -800..0, y 1200..3200. Door: E tiles 2-3 (y 2000..2800) = the Dance Hall's west door.
+Layout (cm): room x -800..0, y 1200..3200. Doors: E tiles 2-3 (y 2000..2800) = the Dance Hall's west door; N tile 1 (x -400..0) = service corridor.
   west : mirrored back bar with gold shelves of bottles; counter x -650..-530 (low cover 120), closed behind.
   lane : x -530..-20, stools at x -480 (pawn-only), >= 4 m clear to the east drink rail.
   east : drink rail (pawn-only) + glowing artwork either side of the door.
@@ -44,7 +44,7 @@ def _prop(name, loc, folder, yaw=0.0, s=1.0, coll="decor", label=None):
 
 
 def shell():
-    return room_shell(N, X0, Y0, TW, TD, doors={"E": [(2, 3)]}, trim="Neon_Gold", portal="Neon_Magenta")
+    return room_shell(N, X0, Y0, TW, TD, doors={"E": [(2, 3)], "N": [(1, 1)]}, trim="Neon_Gold", portal="Neon_Magenta")
 
 
 def back_bar():
@@ -156,7 +156,7 @@ def north_nook():
     """Jukebox and cigarette machine against the north wall (box collision = cover)."""
     f = FL + "Nook"
     # jukebox: body, glowing arch, grille, selection panel
-    jx, jy = -170, 3135
+    jx, jy = -680, 3135                                      # west half of the nook; the N door is x -400..0
     box("LongBar_Jukebox", f, jx - 40, jx + 40, jy - 30, jy + 30, 0, 140, "Counter_Black")
     # dome (dark) + thin glowing oval frame on the front; cylinder rolled 90: scale = (width, height, depth)
     mesh("LongBar_JukeboxArch", f, CYL, (jx, jy, 140), (0.8, 0.6, 0.6), rot=(0, 0, 90), material="Counter_Black", kind=DECOR)
@@ -169,7 +169,7 @@ def north_nook():
     for sx in (-38, 38):
         box("LongBar_JukeboxSide", f, jx + sx - 2, jx + sx + 2, jy - 31, jy - 29, 10, 135, "Neon_Gold", DECOR)
     # cigarette machine: tall box, lit front with rows of coloured packs
-    cx, cy = -400, 3140
+    cx, cy = -500, 3140
     box("LongBar_CigMachine", f, cx - 40, cx + 40, cy - 30, cy + 30, 0, 185, "Speaker_Black")
     box("LongBar_CigFront", f, cx - 32, cx + 32, cy - 31, cy - 30, 70, 175, "Glow_Warm", DECOR)
     rng = random.Random(9)
@@ -211,7 +211,8 @@ def lights():
     for y in (1600, 2850):
         light("spot", "LongBar_Downlight", LL, (-250, y, 590), WARM, 180, 800, rot=(-90, 0, 0),
               outer_cone_angle=40.0, inner_cone_angle=15.0, shadows=(y == 1600))
-    light("point", "LongBar_JukeboxGlow", LL, (-170, 3060, 150), MAG, 15, 450)
+    light("point", "LongBar_JukeboxGlow", LL, (-680, 3060, 150), MAG, 15, 450)
+    light("point", "LongBar_CorridorDoorGlow", LL, (-200, 3140, 380), MAG, 20, 500)
     light("rect", "LongBar_SignLight", LL, (-400, 1250, 330), MAG, 20, 600, rot=(0, 90, 0), source_width=220.0, source_height=200.0)
     light("rect", "LongBar_ArtLight", LL, (-40, 1630, 255), (1, 0.2, 0.7), 5, 450, rot=(0, 180, 0), source_width=500.0, source_height=150.0)
 

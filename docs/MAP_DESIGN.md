@@ -125,14 +125,14 @@ Each room provides **enemy spawn markers** at least **4 m** apart, on valid floo
 | Main Dance Hall | 8×8 | Sunken dance floor (ramped 1 m), raised DJ platform (45 cm), island bar (3×3, square with chamfered neon outline), perimeter seating | Large open fight, 32 m across |
 | Long Bar | 2×5 (built; west of the Dance Hall) | Bar counter (low cover), bottle wall, stools | Lane with cover |
 | VIP Lounge | 4×5 (built; north of Billiards) | Raised 45 cm, curved booths (box collision), low neon walls, gold accents | Elevated-feel flank |
-| Private Room | 2×2 (×2 variants) | Booth, table, champagne, studded walls | Small clearable room |
+| Private Room | 2×2 (×2 variants; built north of the service corridor) | Booth, table, champagne, studded walls | Small clearable room |
 | Billiards | 4×3 (built; east of the Dance Hall, N door to the VIP) | 2–3 pool tables (low cover), cue racks, pendant lights | Mid-size cover maze |
-| Sports Bar | 6×5 | Bar, table rows, TVs, small dance floor (2×2), stage (2×2, 45 cm) | Second large space |
+| Sports Bar | 6×5 (built; east of Billiards) | Bar, table rows, TVs, small dance floor (2×2), stage (2×2, 45 cm) | Second large space |
 | Side Bar | 2×2 | Compact bar | Connector |
-| Restrooms | 2×3 (×2) | Stalls (high cover), sinks, mirrors | Tight close-quarters |
+| Restrooms | 2×3 (×2; built off the service corridor) | Stalls (high cover), sinks, mirrors | Tight close-quarters |
 | Artist's Lounge | 2×2 | Sofa, mirror lights, clothes rack | Side room |
-| Storage | 3×3 | Shelving, kegs, crates (high and low cover) | Back-of-house cover |
-| Service Corridor | 1×N | Concrete, pipes, fluorescent lights | Back-of-house loop |
+| Storage | 2×3 (built; off the service corridor) | Shelving, kegs, crates (high and low cover) | Back-of-house cover |
+| Service Corridor | 1×10 (built; behind the Dance Hall, links Long Bar side to VIP side) | Concrete, pipes, fluorescent lights | Back-of-house loop |
 
 ### 4.3 Tunnel modules (the Las Vegas storm-drain theme from PLAN.md)
 | Module | Size (tiles) | Contents |
@@ -147,6 +147,23 @@ One complete map built from the modules above, following the blueprint's flow:
 **Entry → Main Dance Hall (center) → Long Bar / VIP / Private Rooms (north) → Billiards / Side Bar (east) → Sports Bar + Stage (south) → Restrooms / Storage / Artist's Lounge / Service Corridor (back-of-house loop)**, with tunnel modules linking the club to two or three outer entry points.
 
 Target footprint: about **16 × 18 tiles (64 × 72 m)** for the club, plus tunnels. The angled walls in the blueprint become square grid walls. The angles survive as neon outlines and furniture placement.
+
+**Built so far in `ClubMap` (grid origin = Dance Hall south-west corner, 1 tile = 4 m):**
+
+| Room | Tiles | Position (tiles, x/y) | Connects to |
+|---|---|---|---|
+| Entry / Front Desk (security checkpoint, player start) | 4×3 | 2..6 / -3..0 | front doors (closed until tunnels), Dance Hall |
+| Main Dance Hall | 8×8 | 0..8 / 0..8 | Entry (S), Long Bar (W), Billiards (E) |
+| Long Bar | 2×5 | -2..0 / 3..8 | Dance Hall (E), Service Corridor (N) |
+| Billiards | 4×3 | 8..12 / 2..5 | Dance Hall (W), VIP (N), Sports Bar (E) |
+| VIP Lounge | 4×5 | 8..12 / 5..10 | Billiards (S), Service Corridor (W, on the platform) |
+| Sports Bar + Stage | 6×5 | 12..18 / 1..6 | Billiards (W) |
+| Service Corridor | 1×10 | -2..8 / 8..9 | Long Bar (S), VIP (E), five back-of-house rooms (N) |
+| Private Rooms A / B | 2×2 each | -2..0 and 0..2 / 9..11 | Corridor |
+| Restrooms M / W | 2×3 each | 2..4 and 4..6 / 9..12 | Corridor |
+| Storage | 2×3 | 6..8 / 9..12 | Corridor |
+
+Main loop: Dance Hall → Long Bar → Service Corridor → VIP → Billiards → Dance Hall, with the Sports Bar off Billiards.
 
 ---
 

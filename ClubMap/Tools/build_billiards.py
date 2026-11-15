@@ -53,7 +53,7 @@ def _hidden_struct(label, f, x0, x1, y0, y1, z0, z1):
 
 
 def shell():
-    return room_shell(N, X0, Y0, TW, TD, doors={"W": [(1, 2)], "N": [(0, 1)]}, trim="Neon_Cyan", portal="Neon_Magenta")
+    return room_shell(N, X0, Y0, TW, TD, doors={"W": [(1, 2)], "N": [(0, 1)], "E": [(1, 2)]}, trim="Neon_Cyan", portal="Neon_Magenta")
 
 
 def pool_table(tag, cx, cy, felt, state, rng):
@@ -134,11 +134,11 @@ def walls_dressing():
             p.append(C(f, 4290 + i * 9 + (40 if i > 6 else 0), 1974, z - 2, 5, 4.5, "Ball_Red" if (i + k) % 3 else "Label_Cream"))
     p.append(B(f, 4400, 1978, 190, 280, 2, 55, "Wood_Dark"))
     merge(p, "Billiards_WallBits", "Billiards_WallBits", f)
-    # dartboard on the east wall with a neon ring (faces -X)
-    dz, dy = 175, 1450
-    for (d, m, dx) in ((56, "Neon_Magenta", 0), (46, "Counter_Black", 0.6), (40, "Ball_Red", 1.2), (34, "Label_Cream", 1.8),
+    # dartboard on the north wall with a neon ring (faces -Y; the east wall now has the Sports Bar door)
+    dz, dx0 = 175, 4660
+    for (d, m, dy) in ((56, "Neon_Magenta", 0), (46, "Counter_Black", 0.6), (40, "Ball_Red", 1.2), (34, "Label_Cream", 1.8),
                        (24, "Felt_Green", 2.4), (16, "Label_Cream", 3.0), (5, "Ball_Red", 3.6)):
-        mesh("Billiards_Dart", f, CYL, (4778 - dx, dy, dz), (d / 100, d / 100, 0.006), rot=(90, 0, 0), material=m, kind=DECOR)
+        mesh("Billiards_Dart", f, CYL, (dx0, 1978 - dy, dz), (d / 100, d / 100, 0.006), rot=(0, 0, 90), material=m, kind=DECOR)
     # neon 8-ball sign on the south wall (faces +Y)
     sx, sz = 4300, 330
     for (d, m, dy) in ((84, "Neon_Magenta", 0), (78, "Counter_Black", 0.6), (34, "Neon_White", 1.2)):
@@ -169,7 +169,6 @@ def seating():
         p += _highball(f, x - 15, y + 10, 109) + _rocks(f, x + 5, y + 18, 109)
     merge(p, "Billiards_Drinks", "Billiards_Drinks", f)
     _prop("WallSpeaker", (3237, 1000, 430), f, yaw=-90, s=0.28)
-    _prop("WallSpeaker", (4763, 1800, 430), f, yaw=90, s=0.28)
     _prop("SecurityCam", (4755, 845, 560), f, yaw=45, s=0.16)
 
 
@@ -179,7 +178,8 @@ def lights():
         light("spot", "Billiards_TableLight", LB, (cx, cy, 176), WARM, 160, 420, rot=(-90, 0, 0),
               outer_cone_angle=62.0, inner_cone_angle=40.0, shadows=(tag == "A"))
     light("rect", "Billiards_SignLight", LB, (4300, 860, 330), MAG, 12, 450, rot=(0, 90, 0), source_width=120.0, source_height=120.0)
-    light("point", "Billiards_DartLight", LB, (4720, 1450, 230), MAG, 8, 300)
+    light("point", "Billiards_DartLight", LB, (4660, 1920, 230), MAG, 8, 300)
+    light("point", "Billiards_EastDoorGlow", LB, (4720, 1600, 380), MAG, 20, 500)
     light("rect", "Billiards_RackWash", LB, (3700, 900, 300), WARM, 25, 500, rot=(-60, -90, 0), source_width=350.0, source_height=80.0)
     light("point", "Billiards_DoorGlow", LB, (3280, 1600, 380), MAG, 20, 500)
 
@@ -195,7 +195,7 @@ def build_billiards():
     lights()
     fog_cards(N, 3240, 840, 4760, 1960, layers=((8, 0.5), (30, 0.3)))
     spawn_marker(N, 3550, 1800)
-    spawn_marker(N, 4650, 1400)
+    spawn_marker(N, 4620, 980)
     r["actors"] = len([a for a in _EAS.get_all_level_actors()
                        if str(a.get_folder_path()).startswith(("Rooms/Billiards", "Lighting/Billiards"))])
     return r

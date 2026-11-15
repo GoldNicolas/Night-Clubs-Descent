@@ -97,6 +97,19 @@ PALETTE = {
     "Ball_Black":    ((0.01, 0.01, 0.01), 0.0, 0.08, None, 0),
     "Ball_White":    ((0.80, 0.78, 0.72), 0.0, 0.08, None, 0),
     "Chalk_Blue":    ((0.05, 0.25, 0.60), 0.0, 0.90, None, 0),
+    "Floor_Concrete": ((0.045, 0.045, 0.048), 0.0, 0.75, None, 0),
+    "Velvet_Red":    ((0.110, 0.006, 0.020), 0.0, 0.85, None, 0),
+    "Velvet_Teal":   ((0.004, 0.050, 0.060), 0.0, 0.85, None, 0),
+    "Tile_Black":    ((0.035, 0.035, 0.040), 0.0, 0.12, None, 0),
+    "Porcelain":     ((0.75, 0.75, 0.74), 0.0, 0.10, None, 0),
+    "Steel":         ((0.30, 0.30, 0.32), 0.9, 0.45, None, 0),
+    "Cardboard":     ((0.28, 0.18, 0.09), 0.0, 0.90, None, 0),
+    "Wood_Crate":    ((0.22, 0.14, 0.07), 0.0, 0.80, None, 0),
+    "Wood_Floor":    ((0.10, 0.05, 0.025), 0.0, 0.45, None, 0),
+    "Hazard_Yellow": ((0.70, 0.50, 0.02), 0.0, 0.60, None, 0),
+    "Fire_Red":      ((0.50, 0.02, 0.02), 0.2, 0.35, None, 0),
+    "Exit_Green":    ((0, 0, 0), 0.0, 0.5, (0.10, 1.00, 0.30), 4),
+    "Neon_Orange":   ((0, 0, 0), 0.0, 0.5, (1.00, 0.40, 0.05), 10),
     "Fabric_Black":  ((0.012, 0.012, 0.014), 0.0, 0.85, None, 0),
     "Fabric_Camel":  ((0.25, 0.15, 0.07), 0.0, 0.85, None, 0),
     "Fabric_Navy":   ((0.015, 0.02, 0.06), 0.0, 0.85, None, 0),
@@ -319,17 +332,18 @@ def corner(folder, cx, cy, sx, sy, R, z0, z1, material, segs=6):
              material, yaw=math.degrees(th))
 
 
-def door_portal(folder, axis, c, a0, a1, color):
-    """Neon frame around a doorway opening on a wall band centred at c."""
+def door_portal(folder, axis, c, a0, a1, color, sides=(-1, 1)):
+    """Neon frame around a doorway opening on a wall band centred at c. sides: which faces (-1 / +1) get a frame;
+    room_shell passes only the room's own side so neighbouring rooms never stack frames on the same face."""
     t = 8
     if axis == "x":
-        for side in (-1, 1):
+        for side in sides:
             yy = c + side * (WALL_T / 2 + 2)
             box("DoorNeon", folder, a0 - t, a0, yy - 2, yy + 2, 0, DOOR_H + t, color, DECOR)
             box("DoorNeon", folder, a1, a1 + t, yy - 2, yy + 2, 0, DOOR_H + t, color, DECOR)
             box("DoorNeon", folder, a0 - t, a1 + t, yy - 2, yy + 2, DOOR_H, DOOR_H + t, color, DECOR)
     else:
-        for side in (-1, 1):
+        for side in sides:
             xx = c + side * (WALL_T / 2 + 2)
             box("DoorNeon", folder, xx - 2, xx + 2, a0 - t, a0, 0, DOOR_H + t, color, DECOR)
             box("DoorNeon", folder, xx - 2, xx + 2, a1, a1 + t, 0, DOOR_H + t, color, DECOR)
@@ -355,13 +369,15 @@ def room_shell(name, x0, y0, tiles_w, tiles_d, doors, wall_mat="Wall_Panel", flo
     def ops(edge):
         return [(a, b, -50, DOOR_H) for (a, b) in spans.get(edge, [])]
 
-    box("Floor", f, x0 - h, x1 + h, y0 - h, y1 + h, -20, 0, floor_mat)
-    wall("Wall_S", f, "x", y0 - h, y0 + h, x0 - h, x1 + h, -20, WALL_H, ops("S"), wall_mat)
-    wall("Wall_N", f, "x", y1 - h, y1 + h, x0 - h, x1 + h, -20, WALL_H, ops("N"), wall_mat)
-    wall("Wall_W", f, "y", x0 - h, x0 + h, y0 + h, y1 - h, -20, WALL_H, ops("W"), wall_mat)
-    wall("Wall_E", f, "y", x1 - h, x1 + h, y0 + h, y1 - h, -20, WALL_H, ops("E"), wall_mat)
+    # Every room owns only its side of a shared wall (inner WALL_T/2) and its floor/ceiling stop at the room edge,
+    # so two adjacent rooms never put coincident faces in the same place (that z-fights / flickers).
+    box("Floor", f, x0, x1, y0, y1, -20, 0, floor_mat)
+    wall("Wall_S", f, "x", y0, y0 + h, x0, x1, -20, WALL_H, ops("S"), wall_mat)
+    wall("Wall_N", f, "x", y1 - h, y1, x0, x1, -20, WALL_H, ops("N"), wall_mat)
+    wall("Wall_W", f, "y", x0, x0 + h, y0 + h, y1 - h, -20, WALL_H, ops("W"), wall_mat)
+    wall("Wall_E", f, "y", x1 - h, x1, y0 + h, y1 - h, -20, WALL_H, ops("E"), wall_mat)
     if ceiling:
-        box("Ceiling", f, x0 - h, x1 + h, y0 - h, y1 + h, WALL_H, WALL_H + 20, "Ceiling_Dark", CEILING)
+        box("Ceiling", f, x0, x1, y0, y1, WALL_H, WALL_H + 20, "Ceiling_Dark", CEILING)
     ix0, ix1, iy0, iy1 = x0 + h, x1 - h, y0 + h, y1 - h
     if ceiling:
         R = 60
@@ -381,13 +397,13 @@ def room_shell(name, x0, y0, tiles_w, tiles_d, doors, wall_mat="Wall_Panel", flo
     for edge, lst in spans.items():
         for (a, b) in lst:
             if edge == "S":
-                door_portal(f, "x", y0, a, b, portal)
+                door_portal(f, "x", y0, a, b, portal, sides=(1,))
             elif edge == "N":
-                door_portal(f, "x", y1, a, b, portal)
+                door_portal(f, "x", y1, a, b, portal, sides=(-1,))
             elif edge == "W":
-                door_portal(f, "y", x0, a, b, portal)
+                door_portal(f, "y", x0, a, b, portal, sides=(1,))
             else:
-                door_portal(f, "y", x1, a, b, portal)
+                door_portal(f, "y", x1, a, b, portal, sides=(-1,))
     return {"x0": ix0, "x1": ix1, "y0": iy0, "y1": iy1, "spans": spans, "folder": "Rooms/%s" % name}
 
 

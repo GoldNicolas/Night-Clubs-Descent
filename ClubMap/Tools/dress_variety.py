@@ -449,7 +449,7 @@ def booth_tints():
 
 
 # ---------------------------------------------------------------- VIP lounge (replaces the second VIP booth) + generated props
-def vip_lounge(chair_yaw_offset=0.0):
+def vip_lounge(chair_yaw_offset=-90.0):   # armchair model faces local +Y
     """Second VIP bay (y 620..1040, platform z 45): rug, coffee table, two armchairs, hookah. Chairs/table block pawns only."""
     f = FV + "/VIPLounge"
     clear(["VIPLounge"])

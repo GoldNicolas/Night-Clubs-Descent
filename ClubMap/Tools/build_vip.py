@@ -1,7 +1,7 @@
 """VIP Lounge (4x5 tiles) north of Billiards: raised gold/purple lounge reached through the billiards room.
 Run with include=[cm_kit.py, dress_dance_hall.py, dress_variety.py, build_lighting_fx.py, this file], then build_vip().
 
-Layout (cm): room x 3200..4800, y 2000..4000. Door: S tiles 0-1 (x 3200..4000) = Billiards' north door.
+Layout (cm): room x 3200..4800, y 2000..4000. Doors: S tiles 0-1 (x 3200..4000) = Billiards' north door; W tile 3 (y 3200..3600, on the platform) = service corridor.
   entry zone  y 2020..2600 (floor 0): host stand, velvet ropes, sconces.
   platform    y 2600..3980, raised 45 cm (one step). Front edge: low neon walls (120) with a 6 m opening x 3600..4200.
   north       two gold booths under a gold art-deco feature wall.
@@ -55,7 +55,7 @@ def _hidden_struct(label, f, x0, x1, y0, y1, z0, z1):
 
 
 def shell():
-    return room_shell(N, X0, Y0, TW, TD, doors={"S": [(0, 1)]}, trim="Neon_Gold", portal="Neon_Magenta")
+    return room_shell(N, X0, Y0, TW, TD, doors={"S": [(0, 1)], "W": [(3, 3)]}, trim="Neon_Gold", portal="Neon_Magenta")
 
 
 def platform():
@@ -130,7 +130,7 @@ def art_wall():
 def cabinet():
     """Lit champagne display cabinet on the west wall (high cover, box collision)."""
     f = FV2 + "Cabinet"
-    x0, x1, y0, y1 = 3222, 3292, 2780, 3420
+    x0, x1, y0, y1 = 3222, 3292, 2660, 3140                     # clear of the W door (y 3200..3600)
     box("VIP_Cabinet", f, x0, x1, y0, y1, PZ, PZ + 210, "Counter_Black")
     box("VIP_CabinetGlow", f, x1, x1 + 1, y0 + 20, y1 - 20, PZ + 30, PZ + 195, "Glow_Warm", DECOR)
     box("VIP_CabinetGlass", f, x1 + 18, x1 + 19, y0 + 10, y1 - 10, PZ + 25, PZ + 200, "Glass_Clear", DECOR)
@@ -153,8 +153,8 @@ def cabinet():
 def lounge_and_centre():
     f = FV2 + "Lounge"
     # armchair lounge west of the centre (pawn-only)
-    _prop("LoungeArmchair", (3560, 2880, PZ + 95 * 0.45), f, yaw=90, s=0.45, coll="pawn")
-    _prop("LoungeArmchair", (3560, 3250, PZ + 95 * 0.45), f, yaw=-90, s=0.45, coll="pawn")
+    _prop("LoungeArmchair", (3560, 2880, PZ + 95 * 0.45), f, yaw=0, s=0.45, coll="pawn")
+    _prop("LoungeArmchair", (3560, 3250, PZ + 95 * 0.45), f, yaw=180, s=0.45, coll="pawn")
     _prop("CoffeeTable", (3560, 3065, PZ + 38 * 0.45), f, s=0.45, coll="pawn")
     _prop("Hookah", (3440, 3065, PZ + 95 * 0.42), f, s=0.42)
     # centrepiece: round gold table with a champagne tower (4-3-2-1 coupes)
@@ -197,7 +197,7 @@ def entry_zone():
         box("VIP_Sconce", f, x - 3 if x < 4000 else x - 7, x + 7 if x < 4000 else x + 3, y - 15, y + 15, 230, 290, "Gold", DECOR)
         box("VIP_SconceGlow", f, x + 6 if x < 4000 else x - 8, x + 8 if x < 4000 else x - 6, y - 10, y + 10, 238, 282, "Glow_Warm", DECOR)
     _prop("SecurityCam", (4755, 2025, 560), f, yaw=45, s=0.16)
-    _prop("WallSpeaker", (3237, 3600, 430), f, yaw=-90, s=0.28)
+    _prop("WallSpeaker", (3237, 3820, 430), f, yaw=-90, s=0.28)
     _prop("WallSpeaker", (4763, 2400, 430), f, yaw=90, s=0.28)
 
 
@@ -208,7 +208,8 @@ def lights():
     light("rect", "VIP_ArtWash", LV, (4000, 3900, 560), GOLD, 50, 800, rot=(-70, 90, 0), source_width=1400.0, source_height=100.0)
     light("spot", "VIP_TowerSpot", LV, (4050, 3130, 590), (1, 0.95, 0.85), 500, 700, rot=(-90, 0, 0),
           outer_cone_angle=12.0, inner_cone_angle=6.0, shadows=True)
-    light("rect", "VIP_CabinetLight", LV, (3320, 3100, 160), GOLD, 15, 450, rot=(0, 0, 0), source_width=600.0, source_height=170.0)
+    light("rect", "VIP_CabinetLight", LV, (3320, 2900, 160), GOLD, 15, 450, rot=(0, 0, 0), source_width=450.0, source_height=170.0)
+    light("point", "VIP_CorridorDoorGlow", LV, (3290, 3400, 420), (1, 0.1, 0.55), 18, 450)
     light("point", "VIP_PurpleBooths", LV, (4550, 3175, 300), PURPLE, 30, 650)
     light("point", "VIP_EntryGlow", LV, (3600, 2300, 350), (1, 0.1, 0.55), 20, 600)
     for (x, y) in ((3240, 2350), (4760, 2350)):
@@ -229,7 +230,7 @@ def build_vip():
     fog_cards("VIP_Platform", 3300, PY + 40, 4700, 3940, layers=((PZ + 8, 0.45), (PZ + 30, 0.25)))
     spawn_marker(N, 3500, 2350)       # entry zone
     spawn_marker(N, 4100, 2800, PZ)   # platform, south of the champagne tower
-    spawn_marker(N, 3500, 3550, PZ)   # platform, north-west
+    spawn_marker(N, 3720, 3480, PZ)   # platform, north-west (clear of the corridor door)
     r["actors"] = len([a for a in _EAS.get_all_level_actors()
                        if str(a.get_folder_path()).startswith(("Rooms/VIP", "Lighting/VIP"))])
     return r
