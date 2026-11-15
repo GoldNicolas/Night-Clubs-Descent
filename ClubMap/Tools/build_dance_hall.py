@@ -46,6 +46,9 @@ def build():
     box("Bar_Neon", b, 370, 374, 400, 1800, 10, 16, "Neon_Magenta", DECOR)
     box("Bar_Neon", b, 370, 374, 400, 1800, 100, 106, "Neon_Magenta", DECOR)
     box("BackBar", b, 20, 90, 400, 1800, 0, 110, "Counter_Black")
+    for (y0, y1) in ((380, 400), (1800, 1820)):   # close the 1.6 m bartender aisle (no AI dead-end)
+        box("Bar_Return", b, 90, 250, y0, y1, 0, 112, "Counter_Black")
+        box("Bar_Return_Top", b, 90, 250, y0 - 5, y1 + 5, 112, 120, "Chrome")
     box("BackBar_Glow", b, 20, 24, 450, 1750, 140, 330, "Bottles_Glow", DECOR)
     for z in (190, 260):
         box("BackBar_Shelf", b, 24, 70, 450, 1750, z - 3, z, "Chrome", DECOR)
@@ -53,9 +56,9 @@ def build():
     # ---------------- raised VIP corner (south-east): 45 cm platform, low neon walls, booths
     v = F + "VIP"
     box("VIP_Platform", v, 2600, 3180, 20, 1100, 0, 45, "Platform_Dark")
-    box("VIP_LowWall", v, 2600, 2630, 200, 1100, 0, 120, "Wall_Panel")              # entry gap y 20..200
+    box("VIP_LowWall", v, 2600, 2630, 420, 1100, 0, 120, "Wall_Panel")              # 4 m entry gap y 20..420 (AI gap rule)
     box("VIP_LowWall", v, 2630, 3180, 1070, 1100, 0, 120, "Wall_Panel")
-    box("VIP_LowWall_Neon", v, 2596, 2634, 200, 1100, 120, 126, "Neon_Gold", DECOR)
+    box("VIP_LowWall_Neon", v, 2596, 2634, 420, 1100, 120, 126, "Neon_Gold", DECOR)
     box("VIP_LowWall_Neon", v, 2630, 3180, 1066, 1104, 120, 126, "Neon_Gold", DECOR)
     for (y0, y1) in ((150, 500), (620, 970)):
         box("VIP_Booth_Seat", v, 3000, 3180, y0, y1, 45, 90, "Leather_Wine")
