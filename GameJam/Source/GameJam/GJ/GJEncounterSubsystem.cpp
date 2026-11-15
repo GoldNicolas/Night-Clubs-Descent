@@ -16,6 +16,8 @@
 namespace
 {
 	TAutoConsoleVariable<int32> CVarEnemies(TEXT("gj.Enemies"), 2, TEXT("Enemies the testing ground keeps alive (0 = none)."));
+	TAutoConsoleVariable<int32> CVarWaveSize(TEXT("gj.WaveSize"), 5, TEXT("Enemies in each wave."));
+	TAutoConsoleVariable<float> CVarWaveBreak(TEXT("gj.WaveBreak"), 5.f, TEXT("Seconds between waves."));
 	TAutoConsoleVariable<float> CVarSpawnRadius(TEXT("gj.SpawnRadius"), 1700.f, TEXT("Enemies spawn within this radius (cm) of the PlayerStart."));
 	TAutoConsoleVariable<float> CVarSpawnInterval(TEXT("gj.SpawnInterval"), 2.5f, TEXT("Seconds between enemy arrivals."));
 
@@ -65,6 +67,7 @@ void UGJEncounterSubsystem::KillAll()
 		It->Destroy();
 	}
 	NextSpawnTime = GetWorld()->GetTimeSeconds() + CVarSpawnInterval.GetValueOnGameThread();
+	NextWaveTime = GetWorld()->GetTimeSeconds() + CVarWaveBreak.GetValueOnGameThread();
 }
 
 void UGJEncounterSubsystem::Tick(float DeltaTime)
@@ -76,14 +79,32 @@ void UGJEncounterSubsystem::Tick(float DeltaTime)
 		return;
 	}
 	const double Now = World->GetTimeSeconds();
-	if (Now < NextSpawnTime || CountAliveEnemies() >= CVarEnemies.GetValueOnGameThread())
+	const int32 ActiveLimit = FMath::Max(0, CVarEnemies.GetValueOnGameThread());
+	const int32 WaveSize = FMath::Max(1, CVarWaveSize.GetValueOnGameThread());
+	if (ActiveLimit == 0 || CountAliveEnemies() >= ActiveLimit || Now < NextSpawnTime)
 	{
+		return;
+	}
+	if (SpawnedThisWave >= WaveSize)
+	{
+		if (CountAliveEnemies() > 0 || Now < NextWaveTime)
+		{
+			return;
+		}
+		++CurrentWave;
+		SpawnedThisWave = 0;
+		NextWaveTime = Now + FMath::Max(0.f, CVarWaveBreak.GetValueOnGameThread());
+		UE_LOG(LogAgentRuntime, Display, TEXT("Encounter: starting wave %d"), CurrentWave);
 		return;
 	}
 	NextSpawnTime = Now + FMath::Max(0.1f, CVarSpawnInterval.GetValueOnGameThread());
 	if (!TrySpawnOne())
 	{
 		UE_LOG(LogAgentRuntime, Verbose, TEXT("Encounter: no valid spawn point this round"));
+	}
+	else
+	{
+		++SpawnedThisWave;
 	}
 }
 

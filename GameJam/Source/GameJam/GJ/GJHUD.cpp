@@ -6,6 +6,7 @@
 #include "Engine/Font.h"
 #include "GJPlayerCharacter.h"
 #include "GJRifle.h"
+#include "GJEncounterSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 
@@ -56,10 +57,18 @@ void AGJHUD::DrawHUD()
 	}
 	DrawDamageIndicator(CX, CY);
 
-	// Bottom left: health / armor.
+	// Bottom left: normalized health / armor, so the player's survivability is readable at a glance.
 	const FLinearColor HealthColor = Player->GetHealth() > 50.f ? FLinearColor(0.9f, 0.95f, 0.9f) : FLinearColor(1.f, 0.35f, 0.3f);
-	DrawText(FString::Printf(TEXT("HP %3.0f"), Player->GetHealth()), Pad, Bottom, HealthColor, 1.6f);
-	DrawText(FString::Printf(TEXT("ARMOR %3.0f"), Player->GetArmor()), Pad + 130.f, Bottom, FLinearColor(0.45f, 0.75f, 1.f), 1.6f);
+	const float HealthPercent = Player->GetMaxHealth() > 0.f ? 100.f * Player->GetHealth() / Player->GetMaxHealth() : 0.f;
+	const float ArmorPercent = Player->GetMaxArmor() > 0.f ? 100.f * Player->GetArmor() / Player->GetMaxArmor() : 0.f;
+	DrawText(FString::Printf(TEXT("HP %3.0f%%"), HealthPercent), Pad, Bottom, HealthColor, 1.6f);
+	DrawText(FString::Printf(TEXT("ARMOR %3.0f%%"), ArmorPercent), Pad + 130.f, Bottom, FLinearColor(0.45f, 0.75f, 1.f), 1.6f);
+
+	if (const UGJEncounterSubsystem* Encounters = GetWorld()->GetSubsystem<UGJEncounterSubsystem>())
+	{
+		DrawText(FString::Printf(TEXT("WAVE %d"), Encounters->GetCurrentWave()), CX + 120.f, Bottom,
+			FLinearColor(1.f, 0.8f, 0.3f), 1.4f);
+	}
 
 	// Bottom right: ammo / reload.
 	if (Rifle)

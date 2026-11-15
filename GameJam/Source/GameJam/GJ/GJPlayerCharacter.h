@@ -79,8 +79,8 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Health", meta=(ClampMin=0, ClampMax=1)) float ArmorAbsorbFraction = 1.f;
 	UPROPERTY(EditAnywhere, Category="Health", meta=(Units="s")) float HealthRegenDelay = 4.f;
 	UPROPERTY(EditAnywhere, Category="Health") float HealthRegenPerSecond = 25.f;
-	/** Difficulty knob (contract §13): scales damage taken from agents. 1 = the agent rifle's real damage. */
-	UPROPERTY(EditAnywhere, Category="Health") float IncomingDamageScale = 1.f;
+	/** Difficulty knob (contract §13): scales damage taken from agents. */
+	UPROPERTY(EditAnywhere, Category="Health", meta=(ClampMin=0, ClampMax=1)) float IncomingDamageScale = 0.5f;
 
 	UPROPERTY(EditAnywhere, Category="Weapons") TSubclassOf<AShooterWeapon> DefaultWeaponClass;
 
