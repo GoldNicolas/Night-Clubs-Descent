@@ -32,7 +32,8 @@ public class GameJam : ModuleRules
 			"GameJam/Variant_Shooter/AI",
 			"GameJam/Variant_Shooter/UI",
 			"GameJam/Variant_Shooter/Weapons",
-			"GameJam/GJ"
+			"GameJam/GJ",
+			"GameJam/MapGen"
 		});
 
 		// Uncomment if you are using Slate UI
