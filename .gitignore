@@ -1,0 +1,24 @@
+# Unreal Engine generated folders (any depth: the project and its plugins)
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+
+# IDE and solution files (regenerated from the .uproject)
+.vs/
+*.sln
+*.suo
+*.VC.db
+*.VC.opendb
+
+# Local secrets and settings (e.g. Unreal-MCP local mode)
+.env
+
+# Unreal-MCP editor plugin: large, machine-specific. Not needed to open or build the map.
+# Reinstall on a fresh clone: unreal-mcp-cli install-plugin ./ClubMap --with-server
+**/Plugins/UnrealMCP/
+# Unreal-MCP CLI session files
+.ai-game-dev/
+
+# Claude Code MCP config: machine-specific
+/.mcp.json
