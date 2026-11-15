@@ -21,7 +21,7 @@ UAgentRuntimeSettings::UAgentRuntimeSettings()
 	S1.Stage = EAgentStage::S1;
 	// Pre-tag run name: full (addendum §2). NOT a stand-in for the game's walk line: with crouch+jump masked it drops from 76% to 62%
 	// clear (addendum §3, corrected 2026-11-14). Kept for comparison tests (agent.Mobility full shows it b-hopping). The game's snapshot is
-	// the walk line: run-S1-walk-20261114-152929 (73.0% clear), to be copied in and made active next.
+	// the walk line registered below: run-S1-walk-20261114-152929 (73.0% clear).
 	S1.Mobility = EAgentMobility::Full;
 	S1.TimeLimitSeconds = 30.f;
 	S1.SnapshotDir = TEXT("AgentModels/run-S1-20261113-L009");
@@ -30,7 +30,20 @@ UAgentRuntimeSettings::UAgentRuntimeSettings()
 	S1.Sha256Decoder = TEXT("548be15693d6814cff35de5d6bac28a2b9e0decda9013f073a08b1124a9d407c");
 	Models.Add(S1);
 
-	ActiveRunId = S1.RunId;
+	// Game's walk-line snapshot: D-033, contract v1.2. The run report's only overrides disable crouch and jump.
+	FAgentModelEntry S1Walk;
+	S1Walk.RunId = TEXT("S1-walk-20261114-152929");
+	S1Walk.Stage = EAgentStage::S1;
+	S1Walk.Mobility = EAgentMobility::Walk;
+	S1Walk.TimeLimitSeconds = 30.f;
+	S1Walk.SnapshotDir = TEXT("AgentModels/run-S1-walk-20261114-152929");
+	S1Walk.SetString = TEXT("Combat.Abilities.bCrouch=false;Combat.Abilities.bJump=false");
+	S1Walk.Sha256Encoder = TEXT("6b660c73bc4d302027f6aaf676d767d86ba92a819190231141bbb18efaa814c6");
+	S1Walk.Sha256Policy = TEXT("0d23dd222147e938829b9df5b6f6b6b300bab3e000b05ecf0c8f4d429e8954d6");
+	S1Walk.Sha256Decoder = TEXT("bf9d2653b3e7e695f3c730c58e9d324cb5fa89ba0f95dd658021fed361d719dd");
+	Models.Add(S1Walk);
+
+	ActiveRunId = S1Walk.RunId;
 
 	// The Rodin mob skins (2026-11-15), imported onto SK_Mannequin at 176 cm. Each wears the acid-green enemy marker.
 	EnemySkins = {
