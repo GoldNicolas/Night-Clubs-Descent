@@ -19,10 +19,17 @@ public class GameJam : ModuleRules
 			"GameplayStateTreeModule",
 			"UMG",
 			"Slate",
-			"AgentRuntime"
+			"AgentRuntime",
+			"Niagara"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { });
+		PrivateDependencyModuleNames.AddRange(new string[] { "DeveloperSettings" });
+
+		// Editor-only tooling (GJEditorTools: Anim Blueprint graph edits). Not part of game builds.
+		if (Target.bBuildEditor)
+		{
+			PrivateDependencyModuleNames.AddRange(new string[] { "UnrealEd", "AnimGraph", "BlueprintGraph" });
+		}
 
 		PublicIncludePaths.AddRange(new string[] {
 			"GameJam",

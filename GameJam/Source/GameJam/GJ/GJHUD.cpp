@@ -35,6 +35,19 @@ void AGJHUD::DrawHUD()
 	const float Pad = 24.f;
 	const float Bottom = Canvas->ClipY - 70.f;
 
+	// Screen washes (under the text): a red flash on every hit, and a slow fade to deep red on death.
+	const double Now = GetWorld()->GetTimeSeconds();
+	const double HitAge = Now - Player->GetLastDamageTime();
+	if (HitAge >= 0.0 && HitAge < 0.35)
+	{
+		DrawRect(FLinearColor(0.6f, 0.f, 0.f, 0.18f * static_cast<float>(1.0 - HitAge / 0.35)), 0.f, 0.f, Canvas->ClipX, Canvas->ClipY);
+	}
+	if (Player->IsDead() && Player->GetDeathTime() >= 0.0)
+	{
+		const float Fade = FMath::Clamp(static_cast<float>((Now - Player->GetDeathTime()) / 1.5), 0.f, 1.f);
+		DrawRect(FLinearColor(0.1f, 0.f, 0.f, 0.65f * Fade), 0.f, 0.f, Canvas->ClipX, Canvas->ClipY);
+	}
+
 	const AGJRifle* Rifle = Player->GetRifle();
 	if (!Player->IsDead())
 	{

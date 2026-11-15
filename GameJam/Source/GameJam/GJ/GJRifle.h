@@ -30,6 +30,9 @@ public:
 	/** Cone half-angle the next shot would have right now (for the crosshair). */
 	float GetCurrentSpreadDegrees() const { return SpreadFor(State.ShotIndex); }
 
+	/** The bean rifle's recoil offset of the last bullet (X yaw, Y pitch, degrees), recovering while idle: the view punch follows it. */
+	FVector2D GetViewRecoilDegrees() const;
+
 	/** The last shot that hit an enemy hitbox (HUD hit marker). */
 	double GetLastHitTime() const { return LastHitTime; }
 	EHitZone GetLastHitZone() const { return LastHitZone; }
@@ -48,13 +51,23 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Mirror Rifle") float CameraKickPitch = 0.f;
 
 private:
+	/** GameJam settings PlayerWeapon: swap the visible gun model (static or skeletal). Visual only. */
+	void ApplyGunModel();
 	float SpreadFor(int32 ShotIndex) const;
 	void FireShot(int32 ShotIndex);
 	void PushHud();
 
+	/** Plays a gun-model animation on the first- and third-person gun meshes, stretched to Seconds. */
+	void PlayGunAnim(class UAnimSequence* Anim, float Seconds);
+	/** Plays GameJam settings PlayerReloadAnim on the first-person arms, stretched to Seconds. */
+	void PlayArmsReload(float Seconds);
+
 	FRifleFireState State;
 	FRandomStream Rng;
 	TArray<int32> PendingShots;
+	UPROPERTY() TObjectPtr<class UAnimSequence> GunFireAnim;
+	UPROPERTY() TObjectPtr<class UAnimSequence> GunReloadAnim;
+	bool bWasReloading = false;
 	double LastHitTime = -1.0e9;
 	EHitZone LastHitZone = EHitZone::None;
 	bool bLastHitKill = false;

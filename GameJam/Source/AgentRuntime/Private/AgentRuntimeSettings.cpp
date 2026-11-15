@@ -31,6 +31,33 @@ UAgentRuntimeSettings::UAgentRuntimeSettings()
 	Models.Add(S1);
 
 	ActiveRunId = S1.RunId;
+
+	// The Rodin mob skins (2026-11-15), imported onto SK_Mannequin at 176 cm. Each wears the acid-green enemy marker.
+	EnemySkins = {
+		FSoftObjectPath(TEXT("/Game/Characters/Rodin/Enemy_SuitGoon/SKM_Enemy_SuitGoon.SKM_Enemy_SuitGoon")),
+		FSoftObjectPath(TEXT("/Game/Characters/Rodin/Enemy_Bouncer/SKM_Enemy_Bouncer.SKM_Enemy_Bouncer")),
+		FSoftObjectPath(TEXT("/Game/Characters/Rodin/Enemy_Enforcer/SKM_Enemy_Enforcer.SKM_Enemy_Enforcer")),
+	};
+	// The M16A1 pack's own gun animations (SK_M16_Skeleton); ignored for a gun model on another skeleton.
+	EnemyWeaponFireAnim = FSoftObjectPath(TEXT("/Game/M16A1/Animation/Anim_Shoot.Anim_Shoot"));
+	EnemyWeaponReloadAnim = FSoftObjectPath(TEXT("/Game/M16A1/Animation/Anim_Reload.Anim_Reload"));
+	// The template's third-person rifle reload (UE5 mannequin skeleton, like the Rodin skins).
+	EnemyBodyReloadAnim = FSoftObjectPath(TEXT("/Game/Characters/Mannequins/Anims/Rifle/MM_Rifle_Reload.MM_Rifle_Reload"));
+	// The template's mannequin clips (UE5 skeleton). Deaths are named by the side the hit lands on (checked: a front hit throws
+	// the body back, a left hit to the right).
+	auto Clip = [](const TCHAR* Folder, const TCHAR* Name)
+	{
+		return FSoftObjectPath(FString::Printf(TEXT("/Game/Characters/Mannequins/Anims/%s/%s.%s"), Folder, Name, Name));
+	};
+	EnemyBodyFireAnim = Clip(TEXT("Rifle"), TEXT("MM_Rifle_Fire"));
+	EnemyHitReactFromFront = { Clip(TEXT("Rifle/HitReact"), TEXT("MM_HitReact_Front_Lgt_01")), Clip(TEXT("Rifle/HitReact"), TEXT("MM_HitReact_Front_Lgt_02")),
+		Clip(TEXT("Rifle/HitReact"), TEXT("MM_HitReact_Front_Lgt_03")), Clip(TEXT("Rifle/HitReact"), TEXT("MM_HitReact_Front_Lgt_04")),
+		Clip(TEXT("Rifle/HitReact"), TEXT("MM_HitReact_Front_Med_01")), Clip(TEXT("Rifle/HitReact"), TEXT("MM_HitReact_Front_Med_02")) };
+	EnemyHitReactFromBack = { Clip(TEXT("Rifle/HitReact"), TEXT("MM_HitReact_Back_Med_01")) };
+	EnemyDeathShotFromFront = { Clip(TEXT("Death"), TEXT("MM_Death_Front_01")), Clip(TEXT("Death"), TEXT("MM_Death_Front_02")), Clip(TEXT("Death"), TEXT("MM_Death_Front_03")) };
+	EnemyDeathShotFromBack = { Clip(TEXT("Death"), TEXT("MM_Death_Back_01")) };
+	EnemyDeathShotFromLeft = { Clip(TEXT("Death"), TEXT("MM_Death_Left_01")) };
+	EnemyDeathShotFromRight = { Clip(TEXT("Death"), TEXT("MM_Death_Right_01")) };
 }
 
 const FAgentModelEntry* UAgentRuntimeSettings::FindModel(const FString& RunId) const

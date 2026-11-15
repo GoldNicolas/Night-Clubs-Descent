@@ -42,8 +42,22 @@ public:
 	double GetLastDamageTime() const { return LastDamageTime; }
 	FVector GetLastDamageSource() const { return LastDamageSource; }
 
+	/** Weapon feel: a shot was fired (gun kick-back plus a sharp extra view kick). */
+	void OnRifleShot();
+	/** The recoil punch currently added to the control rotation. The rifle aims bullets from the player's own aim (without it). */
+	FRotator GetAimPunch() const { return AimPunchApplied; }
+	/** Game time of death, or -1 while alive (the HUD darkens the screen from it). */
+	double GetDeathTime() const { return DeathTime; }
+	/** For UGJViewModifier: view-space camera offset, view rotation offset, the arms shift to take back out of the camera,
+	 *  and a world-space camera offset (the fall on death). */
+	void GetViewEffects(FVector& OutViewOffset, FRotator& OutViewRoll, FVector& OutArmsWorldShift, FVector& OutViewWorldOffset) const;
+	/** How far the camera component currently rides off the true eye (it sits on the arms mesh, which bobs, kicks and rests
+	 *  ArmsRestOffsetCm off the eye). Subtract it from the camera location to get the eye the bullets leave from. */
+	FVector GetArmsWorldShift() const { return ArmsWorldShift; }
+
 	virtual void PostInitializeComponents() override;
 	virtual void Tick(float DeltaSeconds) override;
+	virtual void Landed(const FHitResult& Hit) override;
 	virtual float TakeDamage(float Damage, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
 	virtual void OnStartCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
 	virtual void OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
@@ -70,6 +84,24 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category="Weapons") TSubclassOf<AShooterWeapon> DefaultWeaponClass;
 
+	/** Weapon feel (presentation only; bullets keep the mirror rifle's exact spread and recoil). */
+	UPROPERTY(EditAnywhere, Category="Weapon Feel") bool bWeaponFeel = true;
+	/** Where the arms and gun rest relative to the eye, in view space (X forward, Y right, Z up). Framing only: the eye doesn't
+	 *  move. (The near suit sleeve is handled by the first-person material, GJGameSettings::PlayerFirstPersonMaterial.) */
+	UPROPERTY(EditAnywhere, Category="Weapon Feel", meta=(Units="cm")) FVector ArmsRestOffsetCm = FVector(0.f, 0.f, -1.5f);
+	/** Gun swing while walking/running (figure eight), and the view's own bob. */
+	UPROPERTY(EditAnywhere, Category="Weapon Feel", meta=(Units="cm")) float GunBobCm = 1.2f;
+	UPROPERTY(EditAnywhere, Category="Weapon Feel", meta=(Units="cm")) float CameraBobCm = 0.45f;
+	/** The gun lags behind fast turns: cm per degree/second of turn, up to SwayMaxCm. */
+	UPROPERTY(EditAnywhere, Category="Weapon Feel") float SwayCmPerDegPerSec = 0.01f;
+	UPROPERTY(EditAnywhere, Category="Weapon Feel", meta=(Units="cm")) float SwayMaxCm = 2.2f;
+	/** Per shot: the gun jolts back, and the view kicks up on top of the recoil pattern (then springs back). */
+	UPROPERTY(EditAnywhere, Category="Weapon Feel", meta=(Units="cm")) float KickBackCm = 1.8f;
+	UPROPERTY(EditAnywhere, Category="Weapon Feel") float KickPitchDeg = 0.35f;
+	/** Taking a full rifle hit rolls the view this far away from the shot, then it springs back. Roll only: the crosshair and
+	 *  the aim stay true (no aim punch, so the player isn't weaker than the mirror rifle implies). */
+	UPROPERTY(EditAnywhere, Category="Weapon Feel") float HitFlinchRollDeg = 2.5f;
+
 private:
 	bool HandleAgentHit(float Damage, EHitZone Zone, AActor* DamageInstigator);
 	void GiveDefaultWeapon();
@@ -88,6 +120,35 @@ private:
 	UPROPERTY() TObjectPtr<UInputAction> WalkAction;
 	UPROPERTY() TObjectPtr<UInputAction> CrouchAction;
 	UPROPERTY() TObjectPtr<UInputAction> ReloadAction;
+
+	void UpdateWeaponFeel(float DeltaSeconds);
+	void EnsureViewModifier();
+
+	// Weapon feel state
+	FVector ArmsBaseLocation = FVector::ZeroVector;
+	bool bArmsBaseCaptured = false;
+	float BobPhase = 0.f;
+	float BobBlend = 0.f;
+	FVector2D Sway = FVector2D::ZeroVector;
+	FRotator LastAim = FRotator::ZeroRotator;
+	bool bHasLastAim = false;
+	float KickBack = 0.f;
+	float KickBackVel = 0.f;
+	float KickPitch = 0.f;
+	float KickPitchVel = 0.f;
+	float LandDip = 0.f;
+	float LandDipVel = 0.f;
+	float FallSpeed = 0.f;
+	FVector2D PatternPunch = FVector2D::ZeroVector;
+	FRotator AimPunchApplied = FRotator::ZeroRotator;
+	FVector ViewOffset = FVector::ZeroVector;
+	FRotator ViewRoll = FRotator::ZeroRotator;
+	FVector ArmsWorldShift = FVector::ZeroVector;
+	FVector ViewWorldOffset = FVector::ZeroVector;
+	float HitRoll = 0.f;
+	float HitRollVel = 0.f;
+	double DeathTime = -1.0;
+	float DeathDropCm = 0.f;
 
 	float CurrentArmor = 0.f;
 	double LastDamageTime = -1.0e9;

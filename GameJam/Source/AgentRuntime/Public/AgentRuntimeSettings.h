@@ -62,4 +62,59 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category="Enemies", meta=(ClampMin=1, ClampMax=64)) int32 MaxAgents = 16;
 
 	UPROPERTY(Config, EditAnywhere, Category="Enemies") int32 PolicySeed = 1234;
+
+	/**
+	 * Enemy skins (SkeletalMeshes on the SK_Mannequin skeleton). Each enemy picks one at random and scales it to the bean's 176 cm.
+	 * Looks only: the trained body, hitboxes and rifle are the bean's whatever the skin (contract §6.1). Empty = the template mannequin.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category="Enemy Look", meta=(AllowedClasses="/Script/Engine.SkeletalMesh"))
+	TArray<FSoftObjectPath> EnemySkins;
+
+	/** The gun model enemies hold: a StaticMesh or a SkeletalMesh. Empty = the template rifle. NoCollision whatever it is. */
+	UPROPERTY(Config, EditAnywhere, Category="Enemy Look", meta=(AllowedClasses="/Script/Engine.StaticMesh,/Script/Engine.SkeletalMesh"))
+	FSoftObjectPath EnemyWeapon;
+
+	/** Socket of the skin the gun attaches to, and the gun's offset from it (grip alignment). */
+	UPROPERTY(Config, EditAnywhere, Category="Enemy Look") FName EnemyWeaponSocket = TEXT("HandGrip_R");
+	UPROPERTY(Config, EditAnywhere, Category="Enemy Look") FTransform EnemyWeaponOffset;
+
+	/** Optional animations of a skeletal gun model (its own skeleton), time-scaled to the rifle's cadence and reload. Visual only. */
+	UPROPERTY(Config, EditAnywhere, Category="Enemy Look", meta=(AllowedClasses="/Script/Engine.AnimSequence"))
+	FSoftObjectPath EnemyWeaponFireAnim;
+	UPROPERTY(Config, EditAnywhere, Category="Enemy Look", meta=(AllowedClasses="/Script/Engine.AnimSequence"))
+	FSoftObjectPath EnemyWeaponReloadAnim;
+
+	/** The body's reload (the skin's skeleton), played as a dynamic montage on EnemyBodySlot and time-scaled to the rifle's
+	 *  reload. Visual only. It shows once the body's AnimBP (ABP_TP_Rifle) has a Slot node with that name; without one it
+	 *  plays on nothing. */
+	UPROPERTY(Config, EditAnywhere, Category="Enemy Look", meta=(AllowedClasses="/Script/Engine.AnimSequence"))
+	FSoftObjectPath EnemyBodyReloadAnim;
+	UPROPERTY(Config, EditAnywhere, Category="Enemy Look")
+	FName EnemyBodySlot = TEXT("DefaultSlot");
+
+	/** The body's recoil per shot, on EnemyBodySlot (skipped while a reload or hit reaction plays). Visual only. */
+	UPROPERTY(Config, EditAnywhere, Category="Enemy Look", meta=(AllowedClasses="/Script/Engine.AnimSequence"))
+	FSoftObjectPath EnemyBodyFireAnim;
+
+	/** Hit reactions on EnemyBodySlot (upper body: the legs keep moving), by where a non-lethal shot came from; one at random.
+	 *  Visual only: the agent's aim and decisions never see them. */
+	UPROPERTY(Config, EditAnywhere, Category="Enemy Look", meta=(AllowedClasses="/Script/Engine.AnimSequence"))
+	TArray<FSoftObjectPath> EnemyHitReactFromFront;
+	UPROPERTY(Config, EditAnywhere, Category="Enemy Look", meta=(AllowedClasses="/Script/Engine.AnimSequence"))
+	TArray<FSoftObjectPath> EnemyHitReactFromBack;
+
+	/** Death clips (the skin's skeleton), by where the killing shot came from relative to the enemy's facing; one at random.
+	 *  The template's deaths are reactions that never reach the floor, so the body is handed to physics (ragdoll) at
+	 *  EnemyDeathRagdollAt of the clip. Visual only (the corpse never blocks anything). With none, it ragdolls at once. */
+	UPROPERTY(Config, EditAnywhere, Category="Enemy Look", meta=(AllowedClasses="/Script/Engine.AnimSequence"))
+	TArray<FSoftObjectPath> EnemyDeathShotFromFront;
+	UPROPERTY(Config, EditAnywhere, Category="Enemy Look", meta=(AllowedClasses="/Script/Engine.AnimSequence"))
+	TArray<FSoftObjectPath> EnemyDeathShotFromBack;
+	UPROPERTY(Config, EditAnywhere, Category="Enemy Look", meta=(AllowedClasses="/Script/Engine.AnimSequence"))
+	TArray<FSoftObjectPath> EnemyDeathShotFromLeft;
+	UPROPERTY(Config, EditAnywhere, Category="Enemy Look", meta=(AllowedClasses="/Script/Engine.AnimSequence"))
+	TArray<FSoftObjectPath> EnemyDeathShotFromRight;
+	/** Fraction of the death clip after which the body goes limp (ragdoll). */
+	UPROPERTY(Config, EditAnywhere, Category="Enemy Look", meta=(ClampMin=0, ClampMax=1))
+	float EnemyDeathRagdollAt = 0.6f;
 };
