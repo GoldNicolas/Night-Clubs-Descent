@@ -13,3 +13,12 @@ DerivedDataCache/
 
 # Local secrets and settings (e.g. Unreal-MCP local mode)
 .env
+
+# Unreal-MCP editor plugin: ~290 MB, including ~70 MB per-platform bridge binaries. Not needed to build the game.
+# Reinstall on a fresh clone: unreal-mcp-cli install-plugin ./GameJam --with-server
+GameJam/Plugins/UnrealMCP/
+# Unreal-MCP CLI session files
+.ai-game-dev/
+
+# Claude Code MCP config: holds this machine's absolute path to the local MCP server (regenerate with unreal-mcp-cli setup-mcp)
+/.mcp.json

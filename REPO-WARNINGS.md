@@ -5,7 +5,9 @@ Recorded 2026-11-14 by the FPS-Agent session, after a near-miss in this repo.
 ## Status
 - **#1 fixed 2026-11-14:** a root `.gitignore` now ignores `Binaries/`, `Intermediate/`, `Saved/` and `DerivedDataCache/` at any depth, plus `.vs/`, `*.sln`, `*.VC.db` and `.env`. Source, Config, Content and the `.uproject` are still tracked.
 - **#2 fixed 2026-11-14:** `git prune` removed the 10,319 orphaned objects (about 783 MB).
-- **Still open:** Git LFS for `*.uasset` and `*.umap`. It's the game session's call, because it changes storage and GitHub quota. #3 and #4 stay as reminders.
+- **LFS decided 2026-11-14 (game session):** `*.uasset` and `*.umap` go through Git LFS (`.gitattributes`). The first commit adds about 148 MB of template content (541 files, largest 20 MB).
+- **Also ignored:** `GameJam/Plugins/UnrealMCP/` (about 290 MB; reinstall with `unreal-mcp-cli install-plugin ./GameJam --with-server`) and the root `.mcp.json` (it holds this machine's absolute path).
+- #3 and #4 stay as reminders.
 
 ## 1. There was no `.gitignore` (fixed; see Status)
 The Unreal project `GameJam/` produces large generated folders that must never be committed:
