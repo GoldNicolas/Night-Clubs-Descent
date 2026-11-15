@@ -14,9 +14,9 @@ PROPS = {"stool": "BarStool", "DJController": "DJController", "SpeakerStack": "S
          "MirrorBall": "MirrorBall", "BeerTap": "BeerTap", "ChampagneBucket": "ChampagneBucket",
          "WhiskeyBottle": "WhiskeyBottle", "PendantLight": "PendantLight", "Chandelier": "Chandelier",
          "WallSpeaker": "WallSpeaker", "CrowdBarrier": "CrowdBarrier", "FireExitDoor": "FireExitDoor",
-         "CoatRack": "CoatRack", "SecurityCam": "SecurityCam",
+         "SecurityCam": "SecurityCam",
          "LoungeArmchair": "LoungeArmchair", "CoffeeTable": "CoffeeTable", "Hookah": "Hookah",
-         "LiquorBottles": "LiquorBottles", "Turntable": "Turntable",
+         "LiquorBottles": "LiquorBottles", 
          "BouncerPodium": "BouncerPodium", "Ashtray": "Ashtray"}
 
 AT = unreal.AssetToolsHelpers.get_asset_tools()

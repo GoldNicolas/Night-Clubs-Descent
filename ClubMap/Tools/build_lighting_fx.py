@@ -1,5 +1,5 @@
 """Moving lights + floor fog for the Main Dance Hall. Run with include=[cm_kit.py, this file]:
-  pulse_tiles_and_leds()   pulsing emissive (M_CM_Pulse): diagonal wave on the dance floor, sweep across the LED wall
+  dance_tiles(), led_wall()  LED-glass dance tiles (M_CM_DanceTile) and the LED video wall (M_CM_LEDWall)
   sweep_beams()            BP_CM_SweepBeam (spinning moving-head fixture + tilted spot) replaces the static MovingHead props
   floor_fog()              light volumetric haze + drifting translucent fog sheets low over the floor (fog_cards per room)
 All of it is visual only: no collision, nothing the AI traces against.
@@ -7,116 +7,14 @@ All of it is visual only: no collision, nothing the AI traces against.
 import math
 import unreal
 
-PULSE = "/Game/ClubMap/Materials/M_CM_Pulse"
 BEAM_BP = "/Game/ClubMap/Blueprints/BP_CM_SweepBeam"
 MEL = unreal.MaterialEditingLibrary
-
-
-def ensure_pulse_master():
-    """Emissive = EmissiveColor * EmissiveStrength * lerp(PulseMin, 1, 0.5 + 0.5 * sin(2pi * (Time * PulseSpeed + Phase)))."""
-    if _EAL.does_asset_exist(PULSE):
-        return unreal.load_asset(PULSE)
-    m = _AT.create_asset("M_CM_Pulse", MAT_DIR, unreal.Material, unreal.MaterialFactoryNew())
-
-    def sp(name, val, x, y):
-        e = MEL.create_material_expression(m, unreal.MaterialExpressionScalarParameter, x, y)
-        e.set_editor_property("parameter_name", name)
-        e.set_editor_property("default_value", val)
-        return e
-
-    def vp(name, val, x, y):
-        e = MEL.create_material_expression(m, unreal.MaterialExpressionVectorParameter, x, y)
-        e.set_editor_property("parameter_name", name)
-        e.set_editor_property("default_value", unreal.LinearColor(*val))
-        return e
-
-    bc = vp("BaseColor", (0.02, 0.0, 0.01, 1), -400, -400)
-    MEL.connect_material_property(bc, "", unreal.MaterialProperty.MP_BASE_COLOR)
-    MEL.connect_material_property(sp("Metallic", 0.0, -400, -300), "", unreal.MaterialProperty.MP_METALLIC)
-    MEL.connect_material_property(sp("Roughness", 0.3, -400, -200), "", unreal.MaterialProperty.MP_ROUGHNESS)
-
-    t = MEL.create_material_expression(m, unreal.MaterialExpressionTime, -1400, 100)
-    spd = sp("PulseSpeed", 0.5, -1400, 200)
-    mul = MEL.create_material_expression(m, unreal.MaterialExpressionMultiply, -1200, 150)
-    MEL.connect_material_expressions(t, "", mul, "A")
-    MEL.connect_material_expressions(spd, "", mul, "B")
-    ph = sp("Phase", 0.0, -1200, 300)
-    add = MEL.create_material_expression(m, unreal.MaterialExpressionAdd, -1000, 200)
-    MEL.connect_material_expressions(mul, "", add, "A")
-    MEL.connect_material_expressions(ph, "", add, "B")
-    sn = MEL.create_material_expression(m, unreal.MaterialExpressionSine, -850, 200)   # period 1 -> sin(2pi x)
-    MEL.connect_material_expressions(add, "", sn, "")
-    bs = MEL.create_material_expression(m, unreal.MaterialExpressionConstantBiasScale, -700, 200)
-    bs.set_editor_property("bias", 1.0)
-    bs.set_editor_property("scale", 0.5)
-    MEL.connect_material_expressions(sn, "", bs, "")
-    lp = MEL.create_material_expression(m, unreal.MaterialExpressionLinearInterpolate, -550, 200)
-    lp.set_editor_property("const_b", 1.0)
-    MEL.connect_material_expressions(sp("PulseMin", 0.25, -700, 350), "", lp, "A")
-    MEL.connect_material_expressions(bs, "", lp, "Alpha")
-    ec = vp("EmissiveColor", (1, 0.1, 0.55, 1), -550, 0)
-    es = sp("EmissiveStrength", 0.35, -550, 100)
-    m1 = MEL.create_material_expression(m, unreal.MaterialExpressionMultiply, -350, 50)
-    MEL.connect_material_expressions(ec, "", m1, "A")
-    MEL.connect_material_expressions(es, "", m1, "B")
-    m2 = MEL.create_material_expression(m, unreal.MaterialExpressionMultiply, -200, 100)
-    MEL.connect_material_expressions(m1, "", m2, "A")
-    MEL.connect_material_expressions(lp, "", m2, "B")
-    MEL.connect_material_property(m2, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
-    MEL.recompile_material(m)
-    _EAL.save_loaded_asset(m)
-    return m
-
-
-def pulse_mi(name, palette_key, phase, speed, pmin, strength_mult=1.0):
-    """MI_CM_P_<name>: the palette colour of <palette_key>, pulsing."""
-    path = "%s/MI_CM_P_%s" % (MAT_DIR, name)
-    if _EAL.does_asset_exist(path):
-        mi = unreal.load_asset(path)
-    else:
-        mi = _AT.create_asset("MI_CM_P_" + name, MAT_DIR, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
-        MEL.set_material_instance_parent(mi, ensure_pulse_master())
-    bc, met, rough, ec, es = PALETTE[palette_key]
-    MEL.set_material_instance_vector_parameter_value(mi, "BaseColor", unreal.LinearColor(bc[0], bc[1], bc[2], 1))
-    MEL.set_material_instance_scalar_parameter_value(mi, "Metallic", met)
-    MEL.set_material_instance_scalar_parameter_value(mi, "Roughness", rough)
-    MEL.set_material_instance_vector_parameter_value(mi, "EmissiveColor", unreal.LinearColor(ec[0], ec[1], ec[2], 1))
-    MEL.set_material_instance_scalar_parameter_value(mi, "EmissiveStrength", es * strength_mult)
-    MEL.set_material_instance_scalar_parameter_value(mi, "Phase", phase)
-    MEL.set_material_instance_scalar_parameter_value(mi, "PulseSpeed", speed)
-    MEL.set_material_instance_scalar_parameter_value(mi, "PulseMin", pmin)
-    _EAL.save_loaded_asset(mi)
-    return mi
 
 
 def _set_mat(a, mi):
     c = a.static_mesh_component
     c.modify()
     c.set_material(0, mi)
-
-
-def pulse_tiles_and_leds():
-    tiles = [a for a in _EAS.get_all_level_actors() if a.get_actor_label() == "DanceTile"]
-    cols = ["Tile_Magenta", "Tile_Cyan", "Tile_Blue"]
-    n = 0
-    for a in tiles:
-        l = a.get_actor_location()
-        i, j = int((l.x - 800) // 400), int((l.y - 800) // 400)
-        d = i + j                                        # 0..6 diagonal index -> travelling wave
-        col = cols[(i + j) % 3]
-        _set_mat(a, pulse_mi("%s_%d" % (col, d), col, phase=-d / 7.0, speed=1.0, pmin=0.15, strength_mult=1.0))
-        n += 1
-    leds = [a for a in _EAS.get_all_level_actors() if a.get_actor_label() == "LED_Panel"]
-    scr = ["Screen_Blue", "Screen_Pink", "Screen_Cyan"]
-    m = 0
-    for a in leds:
-        l = a.get_actor_location()
-        i = int((l.x - 800) // 270)
-        k = 0 if l.z < 360 else 1
-        col = scr[(i + k) % 3]
-        _set_mat(a, pulse_mi("%s_%d" % (col, i), col, phase=-i / 6.0, speed=0.35, pmin=0.45))
-        m += 1
-    return {"tiles": n, "led_panels": m}
 
 
 def sweep_beams():
