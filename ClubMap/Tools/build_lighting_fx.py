@@ -247,7 +247,7 @@ def fog_cards(room, x0, y0, x1, y1, layers=((8, 1.0), (30, 0.7), (55, 0.4))):
         mesh("FloorFog_%s" % room, "Lighting/%s/Fog" % room, "/Engine/BasicShapes/Plane", ((x0 + x1) / 2, (y0 + y1) / 2, z),
              ((x1 - x0) / 100, (y1 - y0) / 100, 1), rot=(0, (z * 7) % 360, 0), kind=DECOR)
         a = [b for b in _EAS.get_all_level_actors() if b.get_actor_label() == "FloorFog_%s" % room][-1]
-        a.static_mesh_component.set_material(0, fog_mi("L%d" % z, o))
+        a.static_mesh_component.set_material(0, fog_mi("%s_L%d" % (room, z), o))     # per room: rooms can differ
         a.static_mesh_component.set_editor_property("cast_shadow", False)
         out += 1
     return out

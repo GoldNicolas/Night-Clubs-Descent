@@ -16,7 +16,8 @@ PROPS = {"stool": "BarStool", "DJController": "DJController", "SpeakerStack": "S
          "WallSpeaker": "WallSpeaker", "CrowdBarrier": "CrowdBarrier", "FireExitDoor": "FireExitDoor",
          "CoatRack": "CoatRack", "SecurityCam": "SecurityCam",
          "LoungeArmchair": "LoungeArmchair", "CoffeeTable": "CoffeeTable", "Hookah": "Hookah",
-         "LiquorBottles": "LiquorBottles", "Turntable": "Turntable"}
+         "LiquorBottles": "LiquorBottles", "Turntable": "Turntable",
+         "BouncerPodium": "BouncerPodium", "Ashtray": "Ashtray"}
 
 AT = unreal.AssetToolsHelpers.get_asset_tools()
 MEL = unreal.MaterialEditingLibrary

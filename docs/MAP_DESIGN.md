@@ -121,7 +121,7 @@ Each room provides **enemy spawn markers** at least **4 m** apart, on valid floo
 ### 4.2 Club modules (adapted from the blueprint)
 | Module | Size (tiles) | Key contents | Gameplay role |
 |---|---|---|---|
-| Entry / Front Desk | 3×3 | Desk, small bar, coat check, bouncer rope | Start / chokepoint |
+| Entry / Front Desk | 4×3 (built; 4 wide so the 8 m doors can be centered) | Desk, small bar, coat check, bouncer rope | Start / chokepoint |
 | Main Dance Hall | 8×8 | Sunken dance floor (ramped 1 m), raised DJ platform (45 cm), island bar (3×3, square with chamfered neon outline), perimeter seating | Large open fight, 32 m across |
 | Long Bar | 2×5 | Bar counter (low cover), bottle wall, stools | Lane with cover |
 | VIP Lounge | 4×5 | Raised 45 cm, curved booths (box collision), low neon walls, gold accents | Elevated-feel flank |
