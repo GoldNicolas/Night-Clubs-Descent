@@ -9,6 +9,7 @@ class APlayerStart;
 class UBoxComponent;
 class UInstancedStaticMeshComponent;
 class UMaterialInterface;
+class UPointLightComponent;
 class UStaticMesh;
 
 UENUM(BlueprintType)
@@ -18,6 +19,8 @@ enum class EGJMapFamily : uint8
 	Graph,
 	/** Wave function collapse: 20 m modules of halls, rooms and corridor networks. */
 	Wfc,
+	/** Storm-drain tunnels: 4 m drains between small chambers, with a mouth in the south wall (always used with a Socket). */
+	Tunnels,
 };
 
 /**
@@ -29,7 +32,13 @@ enum class EGJMapFamily : uint8
  *   spawned are moved there;
  * - the encounter subsystem asks it for spawn points by walking distance (GetSpawnCandidates).
  * The actor's location is the map's south-west corner at floor level. Drop one into an empty level with a light and sky.
- * Console: gj.Map <graph|wfc> <level> [seed] rebuilds the map while playing; gj.MapInfo prints the current one.
+ *
+ * SOCKET MODE (Socket set): the map is a tunnel network attached to a hand-built level, such as the club (MAPGEN.md §5b). On play it
+ * finds the TargetPoint tagged LocationSocket + <Socket>, hides the gate and the fake tunnel end past it, and moves itself so the
+ * network's mouth continues that tunnel. It picks a size and mouth column that keep clear of the level's geometry and of other
+ * generators. It doesn't touch the player start. Several socket generators can share a level, one per socket.
+ *
+ * Console: gj.Map <graph|wfc|tunnels> <level> [seed] rebuilds every generator's map while playing; gj.MapInfo prints them.
  */
 UCLASS()
 class GAMEJAM_API AGJMapGenerator : public AActor
@@ -39,8 +48,13 @@ class GAMEJAM_API AGJMapGenerator : public AActor
 public:
 	AGJMapGenerator();
 
-	/** The world's map generator, or null. */
+	/** The world's first map generator, or null. */
 	static AGJMapGenerator* Find(const UObject* WorldContext);
+	/** Every map generator in the world. */
+	static TArray<AGJMapGenerator*> FindAll(const UObject* WorldContext);
+
+	/** Attached to a location socket of a hand-built level (Socket set), rather than a whole map of its own. */
+	bool IsSocketMap() const { return !Socket.IsNone(); }
 
 	/** Builds the layout for the current Family / Level / Seed (editor preview button, and on play). */
 	UFUNCTION(CallInEditor, Category="Map")
@@ -76,7 +90,10 @@ public:
 	 */
 	int32 RunSelfCheck(bool bCheckStart) const;
 
-	/** gj.MapSelfTest: after DelaySeconds check this map, rebuild it as the other family, check again, then optionally quit (exit code 1 on failure). */
+	/**
+	 * gj.MapSelfTest: after DelaySeconds check every map in the world, rebuild them (a standalone map as the other family, a socket
+	 * map with a new seed), check again, then optionally quit (exit code 1 on failure).
+	 */
 	void StartSelfTest(float DelaySeconds, bool bQuit);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Map")
@@ -106,14 +123,74 @@ public:
 	UPROPERTY(EditAnywhere, Category="Look") TObjectPtr<UMaterialInterface> LowCoverMaterial;
 	UPROPERTY(EditAnywhere, Category="Look") TObjectPtr<UMaterialInterface> HighCoverMaterial;
 
+	/**
+	 * Direction tag of the level's LocationSocket TargetPoint to attach to (West, East, South, North); None = a standalone map.
+	 * The socket marker faces out of the level, through a gate, SocketMouthCm before the end of its tunnel.
+	 */
+	UPROPERTY(EditAnywhere, Category="Socket")
+	FName Socket;
+
+	/** From the socket marker to the end of its tunnel, where the network's mouth starts (cm, along the marker's facing). */
+	UPROPERTY(EditAnywhere, Category="Socket", meta=(EditCondition="Socket != None"))
+	float SocketMouthCm = 400.f;
+
+	/** The network keeps this far (cm) from the level's geometry and from other generators' maps; it shrinks to fit. */
+	UPROPERTY(EditAnywhere, Category="Socket", meta=(EditCondition="Socket != None"))
+	float SocketClearanceCm = 100.f;
+
+	/**
+	 * A ceiling over the whole map at RoofHeightCm (underground tunnels). It uses the Ceiling object channel, which blocks pawns
+	 * and bullets but is not level geometry for agent perception (GameJam.h, ECC_Ceiling). Walls stop at the roof.
+	 */
+	UPROPERTY(EditAnywhere, Category="Look")
+	bool bRoof = false;
+
+	UPROPERTY(EditAnywhere, Category="Look", meta=(EditCondition="bRoof"))
+	float RoofHeightCm = 400.f;
+
+	UPROPERTY(EditAnywhere, Category="Look", meta=(EditCondition="bRoof"))
+	TObjectPtr<UMaterialInterface> RoofMaterial;
+
+	/** Ceiling lamps over the floor, about LampSpacingTiles apart (an underground map has no other light). */
+	UPROPERTY(EditAnywhere, Category="Lamps")
+	bool bLamps = false;
+
+	UPROPERTY(EditAnywhere, Category="Lamps", meta=(EditCondition="bLamps", ClampMin=1))
+	int32 LampSpacingTiles = 3;
+
+	UPROPERTY(EditAnywhere, Category="Lamps", meta=(EditCondition="bLamps", ClampMin=0))
+	int32 MaxLamps = 40;
+
+	UPROPERTY(EditAnywhere, Category="Lamps", meta=(EditCondition="bLamps"))
+	FLinearColor LampColor = FLinearColor(1.f, 0.48f, 0.14f);
+
+	/** Candelas. */
+	UPROPERTY(EditAnywhere, Category="Lamps", meta=(EditCondition="bLamps"))
+	float LampIntensity = 22.f;
+
+	UPROPERTY(EditAnywhere, Category="Lamps", meta=(EditCondition="bLamps"))
+	float LampRadiusCm = 650.f;
+
+	/** The lamp fitting's look (a small box under the roof), e.g. an emissive material. */
+	UPROPERTY(EditAnywhere, Category="Lamps", meta=(EditCondition="bLamps"))
+	TObjectPtr<UMaterialInterface> LampMaterial;
+
 protected:
 	virtual void BeginPlay() override;
 
 private:
 	bool BuildLayout();
+	/** Socket mode: finds the socket, hides its gate, picks the size and mouth column, moves the actor. False = nothing to build. */
+	bool PrepareSocket(GJMap::FGraphParams& OutParams, int32& OutEntryC);
+	/** Socket mode: hides the gate and the fake tunnel end between the socket marker and the end of its tunnel. */
+	void HideSocketStub(const AActor* Marker, float FloorZ);
+	/** Socket mode: true if a map with this placement would stay clear of the level and of other generators. */
+	bool IsRegionFree(const FTransform& Frame, int32 Rows, int32 Cols) const;
+	void BuildLamps();
 	void BuildGeometry();
 	void ClearGeometry();
-	void AddBlock(UInstancedStaticMeshComponent* Visual, const FVector& LocalCenter, const FVector& Size, bool bCollision);
+	/** A box: an instance of BoxMesh in Visual and, with bCollision, a BlockAll collider (bCeiling: the Ceiling object type). */
+	void AddBlock(UInstancedStaticMeshComponent* Visual, const FVector& LocalCenter, const FVector& Size, bool bCollision, bool bCeiling = false);
 	void PlacePlayers();
 	void WriteMapFile() const;
 
@@ -122,8 +199,15 @@ private:
 	UPROPERTY(VisibleAnywhere, Category="Look") TObjectPtr<UInstancedStaticMeshComponent> WallMeshes;
 	UPROPERTY(VisibleAnywhere, Category="Look") TObjectPtr<UInstancedStaticMeshComponent> LowCoverMeshes;
 	UPROPERTY(VisibleAnywhere, Category="Look") TObjectPtr<UInstancedStaticMeshComponent> HighCoverMeshes;
+	UPROPERTY(VisibleAnywhere, Category="Look") TObjectPtr<UInstancedStaticMeshComponent> RoofMeshes;
+	UPROPERTY(VisibleAnywhere, Category="Lamps") TObjectPtr<UInstancedStaticMeshComponent> LampMeshes;
 
 	UPROPERTY(Transient) TArray<TObjectPtr<UBoxComponent>> Colliders;
+	UPROPERTY(Transient) TArray<TObjectPtr<UPointLightComponent>> Lamps;
+	/** Socket mode: the marker this map is attached to. */
+	TWeakObjectPtr<AActor> SocketMarker;
+	/** Socket mode: the world box this map occupies (other socket generators keep clear of it). */
+	FBox ClaimedBox = FBox(ForceInit);
 	UPROPERTY(Transient) TObjectPtr<APlayerStart> MapStart;
 
 	GJMap::FLayout Layout;

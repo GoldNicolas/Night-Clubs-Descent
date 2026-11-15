@@ -27,7 +27,7 @@ namespace GJMap
 	// Contract: S1 trained with cover blocks on at most 12% of the tiles.
 	constexpr double MaxCoverFraction = 0.12;
 
-	enum class EFamily : uint8_t { Graph, Wfc };
+	enum class EFamily : uint8_t { Graph, Wfc, Tunnels };
 	const char* FamilyName(EFamily Family);
 	bool ParseFamily(const std::string& Name, EFamily& Out);
 
@@ -76,6 +76,13 @@ namespace GJMap
 		double HighFrac = 0.5;
 	};
 
+	/**
+	 * Storm-drain tunnels: the graph family with 4 m drains between small chambers, and one MOUTH, an opening in the
+	 * south wall (the last row) at column EntryC, where the network joins a tunnel outside the map (a club's location socket).
+	 * The start is the tile inside the mouth.
+	 */
+	FGraphParams TunnelPreset(double Level);
+
 	struct FLayout
 	{
 		EFamily Family = EFamily::Graph;
@@ -89,6 +96,7 @@ namespace GJMap
 		std::string Zones;   // 'a' player-start zone, 'd' far zone, '.' none
 
 		int StartTile = -1;  // index into Tiles
+		int MouthTile = -1;  // tunnels: the floor tile in the outer wall where the map opens to the outside, or -1
 		float StartYawDeg = 0.f; // facing at the start, world yaw
 
 		// Generator bookkeeping (metrics).
@@ -110,12 +118,14 @@ namespace GJMap
 	/** Generators return false (and leave Out partly filled) when they fail; skip that seed. They never throw. */
 	bool GenerateGraph(const FGraphParams& P, uint32_t Seed, FLayout& Out);
 	bool GenerateWfc(const FWfcParams& P, uint32_t Seed, FLayout& Out);
+	/** EntryC: the mouth's column (clamped to [1, Cols - 2]); -1 = the middle column. */
+	bool GenerateTunnels(const FGraphParams& P, int EntryC, uint32_t Seed, FLayout& Out);
 
 	/** Presets L1-L5, interpolated for fractional levels (e.g. 2.5 is halfway between L2 and L3). Clamped to [1, 5]. */
 	FGraphParams GraphPreset(double Level);
 	FWfcParams WfcPreset(double Level);
 
-	/** (family, level, seed) -> layout, using the presets. */
+	/** (family, level, seed) -> layout, using the presets (tunnels: mouth in the middle column). */
 	bool MakeLayout(EFamily Family, double Level, uint32_t Seed, FLayout& Out);
 
 	/** Walking distance in metres from one tile to every tile (8-connected, no corner cutting); -1 = unreachable. */

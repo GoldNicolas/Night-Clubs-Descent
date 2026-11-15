@@ -28,6 +28,7 @@ namespace
 	constexpr float MinAgentDistance = 400.f;   // contract §12.5 / §8.5
 	constexpr float MaxPlayerDistance = 4000.f; // engagements within ~40 m (§7.5)
 	constexpr float MaxWalkDistanceM = 60.f;    // procedural maps: reachable within this walk (the 40 m straight-line rule still applies)
+	const FName EnemySpawnTag(TEXT("EnemySpawn")); // hand-placed spawn markers (the club map's TargetPoints)
 }
 
 bool UGJEncounterSubsystem::ShouldCreateSubsystem(UObject* Outer) const
@@ -118,16 +119,40 @@ bool UGJEncounterSubsystem::TrySpawnOne()
 	FRandomStream Rng(static_cast<int32>(FPlatformTime::Cycles()));
 	const float Radius = FMath::Max(300.f, CVarSpawnRadius.GetValueOnGameThread());
 
-	// On a procedural map, probe floor tiles the player can walk to (MAPGEN.md): enemies never spawn in sealed-off pockets.
-	TArray<FVector> MapTiles;
-	if (const AGJMapGenerator* Map = AGJMapGenerator::Find(World); Map && Map->HasLayout())
+	// Where to probe:
+	// - a standalone procedural map: floor tiles the player can walk to (MAPGEN.md), so enemies never spawn in sealed-off pockets;
+	// - a hand-built level with EnemySpawn markers and/or socket maps (the club): the markers plus every socket map's floor tiles
+	//   (all joined to the level through their mouths);
+	// - otherwise: random points around the PlayerStart.
+	TArray<FVector> Candidates;
+	float Jitter = 120.f;
+	const TArray<AGJMapGenerator*> Maps = AGJMapGenerator::FindAll(World);
+	const AGJMapGenerator* const* Standalone = Maps.FindByPredicate([](const AGJMapGenerator* M) { return !M->IsSocketMap() && M->HasLayout(); });
+	if (Standalone)
 	{
-		Map->GetSpawnCandidates(Player->GetActorLocation(), MinPlayerDistance / 100.f, MaxWalkDistanceM, MapTiles);
-		if (MapTiles.IsEmpty())
+		(*Standalone)->GetSpawnCandidates(Player->GetActorLocation(), MinPlayerDistance / 100.f, MaxWalkDistanceM, Candidates);
+		if (Candidates.IsEmpty())
 		{
 			return false;
 		}
 	}
+	else
+	{
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			if (It->ActorHasTag(EnemySpawnTag)) { Candidates.Add(It->GetActorLocation()); }
+		}
+		for (const AGJMapGenerator* Map : Maps)
+		{
+			if (!Map->IsSocketMap() || !Map->HasLayout()) { continue; }
+			TArray<FVector> Tiles;
+			Map->GetSpawnCandidates(Map->GetStartTransform().GetLocation(), 0.f, TNumericLimits<float>::Max(), Tiles);
+			Candidates.Append(Tiles);
+		}
+		Jitter = 60.f;
+	}
+	// Indoors the floor probe must start under the ceiling.
+	const float ProbeAbove = Candidates.IsEmpty() ? 600.f : 150.f;
 
 	bool bFound = false;
 	float BestScore = -1.e9f;
@@ -135,11 +160,11 @@ bool UGJEncounterSubsystem::TrySpawnOne()
 	for (int32 Attempt = 0; Attempt < 48; ++Attempt)
 	{
 		FVector Probe;
-		if (!MapTiles.IsEmpty())
+		if (!Candidates.IsEmpty())
 		{
-			// A random point on a reachable tile, kept clear of the tile edge (walls and cover are whole tiles).
-			const FVector& Tile = MapTiles[Rng.RandRange(0, MapTiles.Num() - 1)];
-			Probe = Tile + FVector(Rng.FRandRange(-120.f, 120.f), Rng.FRandRange(-120.f, 120.f), 0.f);
+			// A random candidate, nudged a little (a whole map tile is free floor; a marker has some room around it).
+			const FVector& Spot = Candidates[Rng.RandRange(0, Candidates.Num() - 1)];
+			Probe = Spot + FVector(Rng.FRandRange(-Jitter, Jitter), Rng.FRandRange(-Jitter, Jitter), 0.f);
 		}
 		else
 		{
@@ -152,7 +177,7 @@ bool UGJEncounterSubsystem::TrySpawnOne()
 		FHitResult Floor;
 		FCollisionQueryParams Q(SCENE_QUERY_STAT(GJSpawnFloor), false);
 		Q.AddIgnoredActor(Player);
-		if (!World->LineTraceSingleByChannel(Floor, Probe + FVector(0, 0, 600.f), Probe - FVector(0, 0, 1500.f), ECC_Visibility, Q)
+		if (!World->LineTraceSingleByChannel(Floor, Probe + FVector(0, 0, ProbeAbove), Probe - FVector(0, 0, 1500.f), ECC_Visibility, Q)
 			|| Floor.ImpactNormal.Z < 0.75f)
 		{
 			continue;

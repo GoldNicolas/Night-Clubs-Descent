@@ -7,7 +7,11 @@
 #include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Components/LightComponent.h"
+#include "Components/PointLightComponent.h"
 #include "Engine/CollisionProfile.h"
+#include "Engine/Light.h"
+#include "Engine/OverlapResult.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -27,10 +31,23 @@ namespace
 {
 	constexpr float FloorThicknessCm = 100.f;
 	constexpr float PlayerStartHalfHeight = 92.f; // APlayerStart's capsule
+	constexpr float RoofThicknessCm = 20.f;
+	const FName LocationSocketTag(TEXT("LocationSocket"));
 
 	GJMap::EFamily ToCore(EGJMapFamily Family)
 	{
-		return Family == EGJMapFamily::Graph ? GJMap::EFamily::Graph : GJMap::EFamily::Wfc;
+		switch (Family)
+		{
+		case EGJMapFamily::Wfc: return GJMap::EFamily::Wfc;
+		case EGJMapFamily::Tunnels: return GJMap::EFamily::Tunnels;
+		default: return GJMap::EFamily::Graph;
+		}
+	}
+
+	/** A socket marker's facing, snapped to the 90-degree grid. */
+	FRotator SocketFacing(const AActor* Marker)
+	{
+		return FRotator(0.f, FMath::RoundToFloat(Marker->GetActorRotation().Yaw / 90.f) * 90.f, 0.f);
 	}
 
 	FString ToFString(const std::string& S)
@@ -44,32 +61,41 @@ namespace
 	}
 
 	FAutoConsoleCommandWithWorldAndArgs CmdMap(TEXT("gj.Map"),
-		TEXT("Rebuild the procedural map: gj.Map <graph|wfc> <level 1-5> [seed]. Enemies are removed and the player moves to the new start."),
+		TEXT("Rebuild every procedural map: gj.Map <graph|wfc|tunnels> <level 1-5> [seed]. Socket maps stay tunnels; the family is for a")
+		TEXT(" standalone map. Enemies are removed and, on a standalone map, the player moves to the new start."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
-			AGJMapGenerator* Map = AGJMapGenerator::Find(World);
-			if (!Map)
+			const TArray<AGJMapGenerator*> Maps = AGJMapGenerator::FindAll(World);
+			if (Maps.IsEmpty())
 			{
 				UE_LOG(LogGameJam, Warning, TEXT("gj.Map: this level has no GJMapGenerator"));
 				return;
 			}
-			EGJMapFamily Family = Map->Family;
+			bool bFamilyGiven = false;
+			EGJMapFamily Family = EGJMapFamily::Graph;
 			if (Args.Num() > 0)
 			{
+				bFamilyGiven = true;
 				if (Args[0].Equals(TEXT("graph"), ESearchCase::IgnoreCase)) { Family = EGJMapFamily::Graph; }
 				else if (Args[0].Equals(TEXT("wfc"), ESearchCase::IgnoreCase)) { Family = EGJMapFamily::Wfc; }
-				else { UE_LOG(LogGameJam, Warning, TEXT("gj.Map: family must be graph or wfc")); return; }
+				else if (Args[0].Equals(TEXT("tunnels"), ESearchCase::IgnoreCase)) { Family = EGJMapFamily::Tunnels; }
+				else { UE_LOG(LogGameJam, Warning, TEXT("gj.Map: family must be graph, wfc or tunnels")); return; }
 			}
-			const float Level = Args.Num() > 1 ? FCString::Atof(*Args[1]) : Map->Level;
 			const int32 Seed = Args.Num() > 2 ? FCString::Atoi(*Args[2]) : RandomSeed();
-			Map->Regenerate(Family, Level, Seed);
+			for (int32 I = 0; I < Maps.Num(); ++I)
+			{
+				AGJMapGenerator* Map = Maps[I];
+				const float Level = Args.Num() > 1 ? FCString::Atof(*Args[1]) : Map->Level;
+				// Each map gets its own seed, derived from the one given, so the whole level is reproducible from one number.
+				Map->Regenerate(bFamilyGiven ? Family : Map->Family, Level, Seed + I * 7919);
+			}
 		}));
 
 	FAutoConsoleCommandWithWorld CmdMapCheck(TEXT("gj.MapCheck"),
 		TEXT("Check the built map against its grid (traces, player, enemies) and log PASS / FAIL."),
 		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
 		{
-			if (const AGJMapGenerator* Map = AGJMapGenerator::Find(World)) { Map->RunSelfCheck(false); }
+			for (const AGJMapGenerator* Map : AGJMapGenerator::FindAll(World)) { Map->RunSelfCheck(false); }
 		}));
 
 	FAutoConsoleCommandWithWorldAndArgs CmdMapSelfTest(TEXT("gj.MapSelfTest"),
@@ -85,7 +111,7 @@ namespace
 	FAutoConsoleCommandWithWorld CmdMapInfo(TEXT("gj.MapInfo"), TEXT("Print the current procedural map's family, level, seed and metrics."),
 		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
 		{
-			if (const AGJMapGenerator* Map = AGJMapGenerator::Find(World))
+			for (const AGJMapGenerator* Map : AGJMapGenerator::FindAll(World))
 			{
 				UE_LOG(LogGameJam, Display, TEXT("%s"), *Map->GetDescription());
 			}
@@ -97,6 +123,8 @@ AGJMapGenerator::AGJMapGenerator()
 	PrimaryActorTick.bCanEverTick = false;
 
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+	// Movable: a socket map moves itself onto its socket when play starts.
+	Root->SetMobility(EComponentMobility::Movable);
 	SetRootComponent(Root);
 
 	// Visible meshes only: all collision is the merged boxes built in BuildGeometry.
@@ -104,6 +132,7 @@ AGJMapGenerator::AGJMapGenerator()
 	{
 		UInstancedStaticMeshComponent* Visual = CreateDefaultSubobject<UInstancedStaticMeshComponent>(Name);
 		Visual->SetupAttachment(Root);
+		Visual->SetMobility(EComponentMobility::Movable);
 		Visual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		Visual->SetCanEverAffectNavigation(false);
 		return Visual;
@@ -112,6 +141,9 @@ AGJMapGenerator::AGJMapGenerator()
 	WallMeshes = MakeVisual(TEXT("WallMeshes"));
 	LowCoverMeshes = MakeVisual(TEXT("LowCoverMeshes"));
 	HighCoverMeshes = MakeVisual(TEXT("HighCoverMeshes"));
+	RoofMeshes = MakeVisual(TEXT("RoofMeshes"));
+	LampMeshes = MakeVisual(TEXT("LampMeshes"));
+	LampMeshes->SetCastShadow(false);
 
 	// Template blockout assets (LevelPrototyping); swap them for the tunnel/club art kit later.
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> Cube(TEXT("/Game/LevelPrototyping/Meshes/SM_Cube.SM_Cube"));
@@ -136,6 +168,15 @@ AGJMapGenerator* AGJMapGenerator::Find(const UObject* WorldContext)
 	return nullptr;
 }
 
+TArray<AGJMapGenerator*> AGJMapGenerator::FindAll(const UObject* WorldContext)
+{
+	TArray<AGJMapGenerator*> Out;
+	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	if (!World) { return Out; }
+	for (TActorIterator<AGJMapGenerator> It(World); It; ++It) { Out.Add(*It); }
+	return Out;
+}
+
 void AGJMapGenerator::BeginPlay()
 {
 	Super::BeginPlay();
@@ -144,7 +185,7 @@ void AGJMapGenerator::BeginPlay()
 	Generate();
 	if (bHasLayout)
 	{
-		PlacePlayers();
+		if (!IsSocketMap()) { PlacePlayers(); } // a socket map is part of a level that has its own start
 		if (bWriteMapFile) { WriteMapFile(); }
 	}
 }
@@ -174,7 +215,7 @@ bool AGJMapGenerator::Regenerate(EGJMapFamily InFamily, float InLevel, int32 InS
 	}
 	Generate();
 	if (!bHasLayout) { return false; }
-	PlacePlayers();
+	if (!IsSocketMap()) { PlacePlayers(); }
 	if (bWriteMapFile) { WriteMapFile(); }
 	return true;
 }
@@ -182,11 +223,26 @@ bool AGJMapGenerator::Regenerate(EGJMapFamily InFamily, float InLevel, int32 InS
 bool AGJMapGenerator::BuildLayout()
 {
 	bHasLayout = false;
+	GJMap::FGraphParams SocketParams;
+	int32 EntryC = -1;
+	if (IsSocketMap())
+	{
+		Family = EGJMapFamily::Tunnels; // the mouth is what joins the socket's tunnel
+		if (!PrepareSocket(SocketParams, EntryC)) { return false; }
+	}
 	// A generator can fail on a seed (e.g. a WFC contradiction every try); the next seed is used then, and logged.
 	const uint32 FirstSeed = static_cast<uint32>(FMath::Max(0, Seed));
 	for (uint32 Skip = 0; Skip < 8 && !bHasLayout; ++Skip)
 	{
-		bHasLayout = GJMap::MakeLayout(ToCore(Family), Level, FirstSeed + Skip, Layout);
+		if (IsSocketMap())
+		{
+			bHasLayout = GJMap::GenerateTunnels(SocketParams, EntryC, FirstSeed + Skip, Layout);
+			Layout.Level = Level;
+		}
+		else
+		{
+			bHasLayout = GJMap::MakeLayout(ToCore(Family), Level, FirstSeed + Skip, Layout);
+		}
 	}
 	if (!bHasLayout)
 	{
@@ -208,9 +264,10 @@ bool AGJMapGenerator::BuildLayout()
 
 FString AGJMapGenerator::GetDescription() const
 {
-	if (!bHasLayout) { return TEXT("MapGen: no layout"); }
+	const FString Where = IsSocketMap() ? FString::Printf(TEXT("[socket %s] "), *Socket.ToString()) : FString();
+	if (!bHasLayout) { return Where + TEXT("no layout"); }
 	const GJMap::FMetrics M = GJMap::ComputeMetrics(Layout);
-	return FString::Printf(TEXT("%s | free %.0f m2, farthest walk %.0f m, cover tiles %d, boxes %d, rooms %d, planned loops %d (gj.Map %s %.2f %u)"),
+	return Where + FString::Printf(TEXT("%s | free %.0f m2, farthest walk %.0f m, cover tiles %d, boxes %d, rooms %d, planned loops %d (gj.Map %s %.2f %u)"),
 		*ToFString(GJMap::Describe(Layout)), M.FreeAreaM2, M.FarthestWalkM, M.CoverTiles, M.WallBoxes, M.RoomsPlaced, M.PlannedLoops,
 		UTF8_TO_TCHAR(GJMap::FamilyName(Layout.Family)), Layout.Level, Layout.Seed);
 }
@@ -222,7 +279,13 @@ void AGJMapGenerator::ClearGeometry()
 		if (Box) { Box->DestroyComponent(); }
 	}
 	Colliders.Reset();
-	for (UInstancedStaticMeshComponent* Visual : { FloorMeshes.Get(), WallMeshes.Get(), LowCoverMeshes.Get(), HighCoverMeshes.Get() })
+	for (UPointLightComponent* Lamp : Lamps)
+	{
+		if (Lamp) { Lamp->DestroyComponent(); }
+	}
+	Lamps.Reset();
+	for (UInstancedStaticMeshComponent* Visual : { FloorMeshes.Get(), WallMeshes.Get(), LowCoverMeshes.Get(), HighCoverMeshes.Get(),
+		RoofMeshes.Get(), LampMeshes.Get() })
 	{
 		Visual->ClearInstances();
 	}
@@ -232,7 +295,8 @@ void AGJMapGenerator::BuildGeometry()
 {
 	ClearGeometry();
 	const TPair<UInstancedStaticMeshComponent*, UMaterialInterface*> Looks[] = {
-		{ FloorMeshes, FloorMaterial }, { WallMeshes, WallMaterial }, { LowCoverMeshes, LowCoverMaterial }, { HighCoverMeshes, HighCoverMaterial } };
+		{ FloorMeshes, FloorMaterial }, { WallMeshes, WallMaterial }, { LowCoverMeshes, LowCoverMaterial }, { HighCoverMeshes, HighCoverMaterial },
+		{ RoofMeshes, RoofMaterial ? RoofMaterial.Get() : WallMaterial.Get() }, { LampMeshes, LampMaterial } };
 	for (const TPair<UInstancedStaticMeshComponent*, UMaterialInterface*>& Look : Looks)
 	{
 		Look.Key->SetStaticMesh(BoxMesh);
@@ -248,10 +312,12 @@ void AGJMapGenerator::BuildGeometry()
 	const FVector MapSize(Layout.Rows * Tile, Layout.Cols * Tile, FloorThicknessCm);
 	AddBlock(FloorMeshes, FVector(MapSize.X * 0.5f, MapSize.Y * 0.5f, -FloorThicknessCm * 0.5f), MapSize, true);
 
+	// Under a roof the walls stop at the roof's top; otherwise they are the map format's 6 m.
+	const float WallHeight = bRoof ? RoofHeightCm + RoofThicknessCm : static_cast<float>(GJMap::WallCm);
 	for (const GJMap::FRect& Rect : GJMap::MergeRects(Layout))
 	{
 		UInstancedStaticMeshComponent* Visual = WallMeshes;
-		float Height = static_cast<float>(GJMap::WallCm);
+		float Height = WallHeight;
 		if (Rect.Kind == GJMap::LowCover) { Visual = LowCoverMeshes; Height = static_cast<float>(GJMap::LowCoverCm); }
 		if (Rect.Kind == GJMap::HighCover) { Visual = HighCoverMeshes; Height = static_cast<float>(GJMap::HighCoverCm); }
 		// Rows R0..R0+NumRows-1 span X from (Rows - R0 - NumRows) to (Rows - R0) tiles: row 0 is north (+X).
@@ -260,9 +326,218 @@ void AGJMapGenerator::BuildGeometry()
 		const FVector Size(Rect.NumRows * Tile, Rect.NumCols * Tile, Height);
 		AddBlock(Visual, FVector(X0 + Size.X * 0.5f, Y0 + Size.Y * 0.5f, Height * 0.5f), Size, true);
 	}
+
+	if (Layout.MouthTile >= 0 && !IsSocketMap())
+	{
+		// A standalone tunnel map has nothing past its mouth: close it with a wall one tile beyond the map.
+		const float Y0 = (Layout.MouthTile % Layout.Cols) * Tile;
+		AddBlock(WallMeshes, FVector(-Tile * 0.5f, Y0 + Tile * 0.5f, WallHeight * 0.5f), FVector(Tile, Tile, WallHeight), true);
+	}
+	if (bRoof)
+	{
+		AddBlock(RoofMeshes, FVector(MapSize.X * 0.5f, MapSize.Y * 0.5f, RoofHeightCm + RoofThicknessCm * 0.5f),
+			FVector(MapSize.X, MapSize.Y, RoofThicknessCm), true, /*bCeiling*/ true);
+	}
+	BuildLamps();
 }
 
-void AGJMapGenerator::AddBlock(UInstancedStaticMeshComponent* Visual, const FVector& LocalCenter, const FVector& Size, bool bCollision)
+void AGJMapGenerator::BuildLamps()
+{
+	if (!bLamps) { return; }
+	// Greedy along the walk from the start: a lamp on every floor tile with no lamp within LampSpacingTiles - 1 tiles.
+	const std::vector<float> Dist = GJMap::WalkDistance(Layout, Layout.StartTile);
+	TArray<int32> Order;
+	for (int32 I = 0; I < static_cast<int32>(Dist.size()); ++I)
+	{
+		if (Dist[static_cast<size_t>(I)] >= 0.f) { Order.Add(I); }
+	}
+	Order.StableSort([&Dist](int32 A, int32 B) { return Dist[static_cast<size_t>(A)] < Dist[static_cast<size_t>(B)]; });
+	const float Ceiling = bRoof ? RoofHeightCm : static_cast<float>(GJMap::WallCm);
+	TArray<FIntPoint> Placed;
+	for (const int32 I : Order)
+	{
+		if (Placed.Num() >= MaxLamps) { break; }
+		const FIntPoint Tile(I / Layout.Cols, I % Layout.Cols);
+		if (Placed.ContainsByPredicate([this, &Tile](const FIntPoint& P)
+			{ return FMath::Max(FMath::Abs(P.X - Tile.X), FMath::Abs(P.Y - Tile.Y)) < LampSpacingTiles; }))
+		{
+			continue;
+		}
+		Placed.Add(Tile);
+		double X = 0, Y = 0;
+		Layout.TileCenterCm(Tile.X, Tile.Y, X, Y);
+		UPointLightComponent* Lamp = NewObject<UPointLightComponent>(this, NAME_None, RF_Transient);
+		Lamp->SetupAttachment(Root);
+		Lamp->SetMobility(EComponentMobility::Movable);
+		Lamp->SetRelativeLocation(FVector(X, Y, Ceiling - 40.f));
+		Lamp->SetIntensityUnits(ELightUnits::Candelas);
+		Lamp->SetIntensity(LampIntensity);
+		Lamp->SetLightColor(LampColor);
+		Lamp->SetAttenuationRadius(LampRadiusCm);
+		Lamp->SetCastShadows(false);
+		Lamp->RegisterComponent();
+		Lamps.Add(Lamp);
+		AddBlock(LampMeshes, FVector(X, Y, Ceiling - 6.f), FVector(40.f, 40.f, 12.f), false);
+	}
+}
+
+bool AGJMapGenerator::PrepareSocket(GJMap::FGraphParams& OutParams, int32& OutEntryC)
+{
+	UWorld* World = GetWorld();
+	ClaimedBox.Init();
+	AActor* Marker = nullptr;
+	for (TActorIterator<AActor> It(World); It && !Marker; ++It)
+	{
+		if (It->ActorHasTag(LocationSocketTag) && It->ActorHasTag(Socket)) { Marker = *It; }
+	}
+	if (!Marker)
+	{
+		UE_LOG(LogGameJam, Error, TEXT("MapGen: no actor tagged %s + %s in this level; socket map not built"), *LocationSocketTag.ToString(),
+			*Socket.ToString());
+		return false;
+	}
+	const FRotator Facing = SocketFacing(Marker);
+	const FVector Forward = Facing.Vector();
+	const FVector Right = FRotationMatrix(Facing).GetUnitAxis(EAxis::Y);
+	const FVector At = Marker->GetActorLocation();
+
+	// The tunnel floor (the marker stands about 1 m above it, in the gate, so probe 1.5 m back toward the level).
+	float FloorZ = At.Z - 100.f;
+	FHitResult Hit;
+	FCollisionQueryParams Query(SCENE_QUERY_STAT(GJSocketFloor), false);
+	Query.AddIgnoredActor(Marker);
+	Query.AddIgnoredActor(this);
+	const FVector Probe = At - Forward * 150.f;
+	if (World->LineTraceSingleByChannel(Hit, Probe, Probe - FVector(0, 0, 400.f), ECC_Visibility, Query) && !Hit.bStartPenetrating)
+	{
+		FloorZ = Hit.ImpactPoint.Z;
+	}
+	else
+	{
+		UE_LOG(LogGameJam, Warning, TEXT("MapGen: socket %s: no floor found under the tunnel; assuming 1 m below the marker"), *Socket.ToString());
+	}
+	SocketMarker = Marker;
+	if (World->IsGameWorld()) { HideSocketStub(Marker, FloorZ); }
+
+	// The mouth tile starts where the socket's tunnel ends and is centred on it. Largest preset size first, mouth columns in a
+	// seeded order; shrink until the network fits.
+	const FVector MouthStart(At.X + Forward.X * SocketMouthCm, At.Y + Forward.Y * SocketMouthCm, FloorZ);
+	const GJMap::FGraphParams Preset = GJMap::TunnelPreset(Level);
+	const float Tile = static_cast<float>(GJMap::TileCm);
+	const float Top = (bRoof ? RoofHeightCm : static_cast<float>(GJMap::WallCm)) + RoofThicknessCm;
+	FRandomStream Rng(Seed ^ 0x51F15EED);
+	for (int32 Size = Preset.Rows; Size >= 8; Size -= 2)
+	{
+		TArray<int32> Columns;
+		for (int32 C = 1; C <= Size - 2; ++C) { Columns.Add(C); }
+		for (int32 I = Columns.Num() - 1; I > 0; --I) { Columns.Swap(I, Rng.RandRange(0, I)); }
+		for (const int32 C : Columns)
+		{
+			const FVector Origin = MouthStart - Right * ((C + 0.5f) * Tile);
+			const FTransform Frame(Facing, Origin);
+			if (!IsRegionFree(Frame, Size, Size)) { continue; }
+			OutParams = Preset;
+			OutParams.Rows = OutParams.Cols = Size;
+			if (Size < Preset.Rows)
+			{
+				// Fewer chambers on a map shrunk to fit.
+				OutParams.NumRooms = FMath::Max(2, FMath::RoundToInt(Preset.NumRooms * static_cast<float>(Size * Size) / static_cast<float>(Preset.Rows * Preset.Rows)));
+			}
+			OutEntryC = C;
+			SetActorLocationAndRotation(Origin, Facing);
+			ClaimedBox += Frame.TransformPosition(FVector::ZeroVector);
+			ClaimedBox += Frame.TransformPosition(FVector(Size * Tile, Size * Tile, Top));
+			UE_LOG(LogGameJam, Log, TEXT("MapGen: socket %s at %s: %d x %d tiles (preset %d), mouth column %d"), *Socket.ToString(),
+				*MouthStart.ToCompactString(), Size, Size, Preset.Rows, C);
+			return true;
+		}
+	}
+	UE_LOG(LogGameJam, Error, TEXT("MapGen: no room for a tunnel map past socket %s (the level's geometry or another map is in the way)"),
+		*Socket.ToString());
+	return false;
+}
+
+bool AGJMapGenerator::IsRegionFree(const FTransform& Frame, int32 Rows, int32 Cols) const
+{
+	const float Tile = static_cast<float>(GJMap::TileCm);
+	const float Clear = SocketClearanceCm;
+	const float Top = (bRoof ? RoofHeightCm : static_cast<float>(GJMap::WallCm)) + RoofThicknessCm;
+	// The map plus clearance on the far side and both flanks; the near side (local X = 0) is the mouth, flush with the socket's
+	// tunnel, so it starts just past it.
+	FBox Box(ForceInit);
+	for (const float X : { 10.f, Rows * Tile + Clear })
+	{
+		for (const float Y : { -Clear, Cols * Tile + Clear })
+		{
+			Box += Frame.TransformPosition(FVector(X, Y, 0.f));
+		}
+	}
+	Box.Min.Z = Frame.GetLocation().Z + 10.f; // above the level's floor slabs
+	Box.Max.Z = Frame.GetLocation().Z + Top;
+
+	for (const AGJMapGenerator* Other : FindAll(this))
+	{
+		if (Other != this && Other->ClaimedBox.IsValid && Other->ClaimedBox.Intersect(Box)) { return false; }
+	}
+	// Anything in the level that a pawn would bump into (walls, floors, ceilings, cover).
+	FCollisionObjectQueryParams Objects;
+	Objects.AddObjectTypesToQuery(ECC_WorldStatic);
+	Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
+	Objects.AddObjectTypesToQuery(ECC_Ceiling);
+	FCollisionQueryParams Query(SCENE_QUERY_STAT(GJSocketRegion), false);
+	Query.AddIgnoredActor(this);
+	TArray<FOverlapResult> Overlaps;
+	GetWorld()->OverlapMultiByObjectType(Overlaps, Box.GetCenter(), FQuat::Identity, Objects, FCollisionShape::MakeBox(Box.GetExtent()), Query);
+	for (const FOverlapResult& Overlap : Overlaps)
+	{
+		const UPrimitiveComponent* Component = Overlap.GetComponent();
+		if (Component && Component->GetCollisionResponseToChannel(ECC_Pawn) == ECR_Block) { return false; }
+	}
+	return true;
+}
+
+void AGJMapGenerator::HideSocketStub(const AActor* Marker, float FloorZ)
+{
+	// The gate, its warning lamp and the fake continuation past it (fog veils, black end wall, far lamp), plus the tunnel's own end
+	// wall and coves: every mesh or light lying wholly between just behind the marker and the end of the tunnel, within its 4 m
+	// width. The tunnel's floor, side walls and ceiling run past the marker, so they stay. Labels and outliner folders don't exist
+	// in a packaged game, so this goes by geometry.
+	const FRotator Facing = SocketFacing(Marker);
+	const FVector Forward = Facing.Vector();
+	const FVector Right = FRotationMatrix(Facing).GetUnitAxis(EAxis::Y);
+	const FVector At = Marker->GetActorLocation();
+	const float Top = FloorZ + (bRoof ? RoofHeightCm : static_cast<float>(GJMap::WallCm)) + 40.f;
+	const float HalfWidth = GJMap::TileCm * 0.5f + 15.f;
+	int32 Hidden = 0;
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		AActor* Actor = *It;
+		if (Actor == Marker || Actor == this || Actor->IsHidden() || Actor->IsA<APawn>() || Actor->IsA<AGJMapGenerator>()) { continue; }
+		const bool bLight = Actor->IsA<ALight>();
+		if (!bLight && !Actor->FindComponentByClass<UStaticMeshComponent>()) { continue; }
+		FVector Center = Actor->GetActorLocation();
+		FVector Extent = FVector::ZeroVector;
+		if (!bLight) { Actor->GetActorBounds(/*bOnlyCollidingComponents*/ false, Center, Extent); }
+		const FVector D = Center - At;
+		const double Along = FVector::DotProduct(D, Forward);
+		const double Across = FVector::DotProduct(D, Right);
+		const double AlongExtent = FMath::Abs(Forward.X) * Extent.X + FMath::Abs(Forward.Y) * Extent.Y;
+		const double AcrossExtent = FMath::Abs(Right.X) * Extent.X + FMath::Abs(Right.Y) * Extent.Y;
+		if (Along - AlongExtent < -75.0 || Along + AlongExtent > SocketMouthCm + 30.0 || FMath::Abs(Across) + AcrossExtent > HalfWidth
+			|| Center.Z - Extent.Z < FloorZ - 30.0 || Center.Z + Extent.Z > Top)
+		{
+			continue;
+		}
+		Actor->SetActorHiddenInGame(true);
+		Actor->SetActorEnableCollision(false);
+		TInlineComponentArray<ULightComponent*> LightComponents(Actor);
+		for (ULightComponent* Light : LightComponents) { Light->SetVisibility(false); }
+		++Hidden;
+	}
+	UE_LOG(LogGameJam, Log, TEXT("MapGen: socket %s: hid %d gate / tunnel-end actors"), *Socket.ToString(), Hidden);
+}
+
+void AGJMapGenerator::AddBlock(UInstancedStaticMeshComponent* Visual, const FVector& LocalCenter, const FVector& Size, bool bCollision, bool bCeiling)
 {
 	if (Visual && BoxMesh)
 	{
@@ -283,6 +558,11 @@ void AGJMapGenerator::AddBlock(UInstancedStaticMeshComponent* Visual, const FVec
 		Box->SetRelativeLocation(LocalCenter);
 		Box->SetBoxExtent(Size * 0.5f, /*bUpdateOverlaps*/ false);
 		Box->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+		if (bCeiling)
+		{
+			// The Ceiling object type: blocks pawns and bullets, but agent perception (WorldStatic) doesn't see it.
+			Box->SetCollisionObjectType(ECC_Ceiling);
+		}
 		Box->SetGenerateOverlapEvents(false);
 		Box->SetCanEverAffectNavigation(false);
 		Box->RegisterComponent();
@@ -404,13 +684,17 @@ int32 AGJMapGenerator::RunSelfCheck(bool bCheckStart) const
 		{
 			for (const float Height : { 60.f, 200.f })
 			{
-				// Grid answer: the first tile along the direction that blocks at this height.
+				// Grid answer: the first tile along the direction that blocks at this height. Through a mouth the grid ends before a
+				// wall does; nothing to compare there.
 				int32 Steps = 1;
+				bool bOffGrid = false;
 				for (;; ++Steps)
 				{
+					if (!Layout.InBounds(R + Dr[D] * Steps, C + Dc[D] * Steps)) { bOffGrid = true; break; }
 					const char T = Layout.At(R + Dr[D] * Steps, C + Dc[D] * Steps);
 					if (T == GJMap::Wall || T == GJMap::HighCover || (T == GJMap::LowCover && Height < GJMap::LowCoverCm)) { break; }
 				}
+				if (bOffGrid) { continue; }
 				const float Expected = (Steps - 0.5f) * GJMap::TileCm;
 				const FVector Start = TileToWorld(Tile) + Up * Height;
 				const int32 Target = Layout.Index(R + Dr[D] * Steps, C + Dc[D] * Steps);
@@ -430,10 +714,46 @@ int32 AGJMapGenerator::RunSelfCheck(bool bCheckStart) const
 		}
 	}
 
-	// The player.
+	// A socket map must be walkable from its level: a standing capsule passes from inside the socket's tunnel, through the gate's
+	// place and the mouth, to the tile inside the mouth, and both ends stand on the same floor height.
+	if (IsSocketMap())
+	{
+		const AActor* Marker = SocketMarker.Get();
+		if (!Marker)
+		{
+			Fail(TEXT("socket marker missing"));
+		}
+		else
+		{
+			const FVector Forward = SocketFacing(Marker).Vector();
+			const FVector Inside = TileToWorld(Layout.StartTile);
+			const FVector Back = FVector(Marker->GetActorLocation().X, Marker->GetActorLocation().Y, Inside.Z) - Forward * 150.f;
+			const FCollisionShape Capsule = FCollisionShape::MakeCapsule(40.f, 88.f);
+			const FVector Lift(0, 0, 88.f + 10.f);
+			FHitResult Hit;
+			if (World->SweepSingleByChannel(Hit, Back + Lift, Inside + Lift, FQuat::Identity, ECC_Pawn, Capsule, Query))
+			{
+				Fail(FString::Printf(TEXT("the way in through socket %s is blocked by %s at %s"), *Socket.ToString(),
+					*GetNameSafe(Hit.GetActor()), *Hit.ImpactPoint.ToCompactString()));
+			}
+			FHitResult Ground;
+			if (!World->LineTraceSingleByChannel(Ground, Back + Lift, Back - FVector(0, 0, 200.f), ECC_Visibility, Query)
+				|| FMath::Abs(Ground.ImpactPoint.Z - Inside.Z) > 5.f)
+			{
+				Fail(FString::Printf(TEXT("socket %s: the level's tunnel floor (%.0f) and the map's floor (%.0f) don't meet"), *Socket.ToString(),
+					Ground.bBlockingHit ? Ground.ImpactPoint.Z : -1.f, Inside.Z));
+			}
+		}
+	}
+
+	// The player (a socket map is part of a bigger level, so the player can be anywhere in it: walks are measured from the mouth).
 	const APawn* Player = World->GetFirstPlayerController() ? World->GetFirstPlayerController()->GetPawn() : nullptr;
 	int32 PlayerTile = INDEX_NONE;
-	if (!Player)
+	if (IsSocketMap())
+	{
+		PlayerTile = Layout.StartTile;
+	}
+	else if (!Player)
 	{
 		Fail(TEXT("no player pawn"));
 	}
@@ -465,8 +785,9 @@ int32 AGJMapGenerator::RunSelfCheck(bool bCheckStart) const
 		for (TActorIterator<AEnemyBean> It(World); It; ++It)
 		{
 			if (!It->IsAlive()) { continue; }
-			++Enemies;
 			const int32 Tile = WorldToTile(It->GetActorLocation());
+			if (IsSocketMap() && Tile == INDEX_NONE) { continue; } // elsewhere in the level
+			++Enemies;
 			if (Tile == INDEX_NONE || Layout.Tiles[static_cast<size_t>(Tile)] != GJMap::Floor || Dist[static_cast<size_t>(Tile)] < 0.f)
 			{
 				Fail(FString::Printf(TEXT("enemy %s is not on a reachable floor tile (%s)"), *It->GetName(), *It->GetActorLocation().ToString()));
@@ -490,15 +811,29 @@ void AGJMapGenerator::StartSelfTest(float DelaySeconds, bool bQuit)
 {
 	SelfTestProblems = 0;
 	FTimerManager& Timers = GetWorldTimerManager();
-	Timers.SetTimer(SelfTestTimer, FTimerDelegate::CreateWeakLambda(this, [this, DelaySeconds, bQuit]()
+	// Every map in the world: a level holds one standalone map, or socket maps attached to a hand-built level.
+	auto CheckAll = [this](bool bCheckStart)
 	{
-		SelfTestProblems += RunSelfCheck(/*bCheckStart*/ false);
-		Regenerate(Family == EGJMapFamily::Graph ? EGJMapFamily::Wfc : EGJMapFamily::Graph, Level, RandomSeed());
-		// Right after a rebuild the player must be on the new start; enemies arrive again over the delay.
-		SelfTestProblems += RunSelfCheck(/*bCheckStart*/ true);
-		GetWorldTimerManager().SetTimer(SelfTestTimer, FTimerDelegate::CreateWeakLambda(this, [this, bQuit]()
+		int32 Problems = 0;
+		for (const AGJMapGenerator* Map : FindAll(this)) { Problems += Map->RunSelfCheck(bCheckStart); }
+		return Problems;
+	};
+	Timers.SetTimer(SelfTestTimer, FTimerDelegate::CreateWeakLambda(this, [this, DelaySeconds, bQuit, CheckAll]()
+	{
+		SelfTestProblems += CheckAll(/*bCheckStart*/ false);
+		const int32 NewSeed = RandomSeed();
+		const TArray<AGJMapGenerator*> Maps = FindAll(this);
+		for (int32 I = 0; I < Maps.Num(); ++I)
 		{
-			SelfTestProblems += RunSelfCheck(/*bCheckStart*/ false);
+			AGJMapGenerator* Map = Maps[I];
+			const EGJMapFamily Next = Map->IsSocketMap() ? Map->Family : Map->Family == EGJMapFamily::Graph ? EGJMapFamily::Wfc : EGJMapFamily::Graph;
+			Map->Regenerate(Next, Map->Level, NewSeed + I * 7919);
+		}
+		// Right after a rebuild the player must be on the new start; enemies arrive again over the delay.
+		SelfTestProblems += CheckAll(/*bCheckStart*/ true);
+		GetWorldTimerManager().SetTimer(SelfTestTimer, FTimerDelegate::CreateWeakLambda(this, [this, bQuit, CheckAll]()
+		{
+			SelfTestProblems += CheckAll(/*bCheckStart*/ false);
 			UE_LOG(LogGameJam, Display, TEXT("MapSelfTest: %s (%d problems)"), SelfTestProblems == 0 ? TEXT("PASS") : TEXT("FAIL"), SelfTestProblems);
 			if (bQuit) { FPlatformMisc::RequestExitWithStatus(false, SelfTestProblems == 0 ? 0 : 1); }
 		}), FMath::Max(1.f, DelaySeconds), false);
@@ -509,7 +844,8 @@ void AGJMapGenerator::WriteMapFile() const
 {
 	const FString Dir = FPaths::ProjectSavedDir() / TEXT("MapGen");
 	IFileManager::Get().MakeDirectory(*Dir, /*Tree*/ true);
-	const FString Name = FString::Printf(TEXT("%s-L%.2f-%u.txt"), UTF8_TO_TCHAR(GJMap::FamilyName(Layout.Family)), Layout.Level, Layout.Seed);
+	const FString Name = FString::Printf(TEXT("%s%s-L%.2f-%u.txt"), IsSocketMap() ? *(Socket.ToString() + TEXT("-")) : TEXT(""),
+		UTF8_TO_TCHAR(GJMap::FamilyName(Layout.Family)), Layout.Level, Layout.Seed);
 	const FString Path = Dir / Name;
 	if (FFileHelper::SaveStringToFile(ToFString(GJMap::ToMapFormatV1(Layout)), *Path))
 	{

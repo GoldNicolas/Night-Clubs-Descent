@@ -19,11 +19,11 @@ Read before touching enemy/agent code, player body/movement/sounds, collision, s
 - On the Linux dev box, UE 5.7.4 (installed build, with Learning Agents and the Python plugin) is at `~/Downloads/unreal_engine`. Build: `~/Downloads/unreal_engine/Engine/Build/BatchFiles/Linux/Build.sh GameJamEditor Linux Development -Project=$PWD/GameJam/GameJam.uproject -WaitMutex` (from the repo root; about 1 min). On Windows: `Build.bat ... Win64`.
 - Run a level headless: `~/Downloads/unreal_engine/Engine/Binaries/Linux/UnrealEditor <abs>/GameJam.uproject /Game/GJ/Lvl_MapGen -game -nullrhi -nosound -unattended -nosplash -stdout -ExecCmds="..."`. Editor Python scripts run with `-run=pythonscript -script=<file> -EnablePlugins=PythonScriptPlugin -unattended -nullrhi` (how `Lvl_MapGen` was made).
 - The only automated tests are for the map generator. They run without Unreal: `Tools/MapGen/build.sh /tmp/mapgen_test && /tmp/mapgen_test stats 30` (exit 1 on any invalid or non-deterministic layout); `/tmp/mapgen_test show graph 2.5 42` prints one map. Everything else is verified in-editor (PIE) against the contract's §16 acceptance tests. Packaged Development **and Shipping** inference must be checked (PLAN §12).
-- Default map: `/Game/FirstPerson/Lvl_FirstPerson` (World Partition). The procedural map's test level is `/Game/GJ/Lvl_MapGen`. The `GJ` testing ground needs no map changes: `UGJEncounterSubsystem` runs in every Game/PIE world, and the player is `Content/GJ/BP_GJPlayer` / `BP_GJPlayerController`.
+- Default map: `/Game/FirstPerson/Lvl_FirstPerson` (World Partition). The procedural map's test level is `/Game/GJ/Lvl_MapGen`. The club level is `/Game/GJ/Lvl_Club`: Sebastian's club map (`/Game/ClubMap/`, an unchanged copy from branch `map-design`; never edit it here) as an always-loaded sublevel, plus procedural tunnel maps at its location sockets (MAPGEN.md §5b). The `GJ` testing ground needs no map changes: `UGJEncounterSubsystem` runs in every Game/PIE world, and the player is `Content/GJ/BP_GJPlayer` / `BP_GJPlayerController`.
 - Console variables for testing:
   - `agent.Model <run id>` (before Play), `agent.Mobility static|walk|full` (live), `agent.Paused`, `agent.Debug`, `agent.ShowBean`, `agent.ShowHitboxes`, `agent.Tracers`
   - `gj.Enemies N`, `gj.SpawnRadius <cm>`, `gj.SpawnInterval <s>`, `gj.KillEnemies`, `gj.Tracers`
-  - `gj.Map <graph|wfc> <level> [seed]` (rebuild the procedural map), `gj.MapInfo`, `gj.MapCheck`, `gj.MapSelfTest [delay] [quit]` (in-game map test; see MAPGEN.md §7)
+  - `gj.Map <graph|wfc|tunnels> <level> [seed]` (rebuild every procedural map in the level), `gj.MapInfo`, `gj.MapCheck`, `gj.MapSelfTest [delay] [quit]` (in-game map test; see MAPGEN.md §7)
   - `gj.Music 0|1`, `gj.MusicVolume`, `gj.MusicTier -1|0|1|2`, `gj.MusicInfo`
 - Headless runs normally use `-nosound`, which turns the music off. To exercise it with no speakers, drop `-nosound` and set `SDL_AUDIODRIVER=dummy`.
 
@@ -40,14 +40,14 @@ Read before touching enemy/agent code, player body/movement/sounds, collision, s
 - `AGJPlayerCharacter` (extends `AShooterCharacter`): bean-identical capsule and hitboxes, the bean's movement numbers, walk and crouch keys (silent to agents), armor and regen.
 - `AGJRifle`: mirrors the enemy rifle using the vendored `FRifleFireState`/`CombatMath`, hitscan on the Weapon channel.
 - `AGJHUD`: canvas HUD.
-- `UGJEncounterSubsystem`: a placeholder Encounter Director that applies the contract's spawn rules. On a procedural map it probes tiles by walking distance from the player.
+- `UGJEncounterSubsystem`: a placeholder Encounter Director that applies the contract's spawn rules. On a procedural map it probes tiles by walking distance from the player; in the club it uses the `EnemySpawn`-tagged markers plus the socket maps' tiles.
 - `UGJMusicSubsystem` + `UGJMusicSettings` (Project Settings > Game > GJ Music): adaptive music. Looping stems are locked to one Quartz clock and faded by intensity tier (Prowl / Hunt / Fight). It is presentation only, so agents never hear it. The stems come from `Tools/Music/clubsynth` (plain C++17).
 
 `Source/GameJam/MapGen/` is the procedural map generator (MAPGEN.md):
 - `GJLayoutGen.*` (namespace `GJMap`) is **plain C++17 with no Unreal types or exceptions**, so `Tools/MapGen` can build it with g++. Keep it that way. All randomness goes through `GJMap::FRng`, never `std::` distributions, so a `(family, level, seed)` tuple gives the same map everywhere.
-- `AGJMapGenerator` turns a layout into merged `BlockAll` box colliders plus collision-free instanced meshes, replaces the level's PlayerStarts with one at the layout start, and hands spawn candidates to the encounter subsystem. Its location is the map's south-west corner; row 0 is north (+X), column 0 is west.
+- `AGJMapGenerator` turns a layout into merged `BlockAll` box colliders plus collision-free instanced meshes, replaces the level's PlayerStarts with one at the layout start, and hands spawn candidates to the encounter subsystem. Its location is the map's south-west corner; row 0 is north (+X), column 0 is west. With `Socket` set it is a **socket map** instead: a `tunnels` layout that hides a hand-built level's gate at that `LocationSocket`, moves itself so its mouth continues the tunnel, keeps clear of the level, and leaves the player start alone (MAPGEN.md §5b).
 
-Custom collision channels (`Config/DefaultEngine.ini`): `GameTraceChannel1` = Projectile (template), `GameTraceChannel2` = **Weapon** (`ECC_Weapon`), `GameTraceChannel3` = **AgentPawn**.
+Custom collision channels (`Config/DefaultEngine.ini`): `GameTraceChannel1` = Projectile (template), `GameTraceChannel2` = **Weapon** (`ECC_Weapon`), `GameTraceChannel3` = **AgentPawn**, `GameTraceChannel4` = **Ceiling** (`ECC_Ceiling`, object type for ceilings and roofs: blocks pawns and Weapon, invisible to agent perception, which queries WorldStatic only). The club map uses the same slots.
 
 ## Rules that are easy to break
 
