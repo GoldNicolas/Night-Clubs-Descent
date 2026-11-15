@@ -10,6 +10,7 @@ Read before touching enemy/agent code, player body/movement/sounds, collision, s
 - [PLAN.md](PLAN.md): game design, proposed architecture, milestones, open decisions. Confirmed vs Proposed vs Open is deliberate; don't promote open ideas to requirements or invent lore.
 - [FPS-Agent-Constraints.md](FPS-Agent-Constraints.md) (v1.1) + [FPS-Agent-Constraints-v1.2-addendum.md](FPS-Agent-Constraints-v1.2-addendum.md) = **contract v1.2**, the authority on observation/action schema, body/rifle/movement numbers, perception, hearing, timing, spawning and acceptance tests. Code comments cite it as `§N` and PLAN as `PLAN §N`.
 - [MAPGEN.md](MAPGEN.md): the procedural map generator (families, levels, rules, Unreal integration, measured stats).
+- [MUSIC.md](MUSIC.md): the adaptive club music (stems, tiers, how to render, import or replace stems).
 - [REPO-WARNINGS.md](REPO-WARNINGS.md) and [GameJam/Source/AgentRuntime/VENDORED.md](GameJam/Source/AgentRuntime/VENDORED.md).
 
 ## Build / run
@@ -23,6 +24,8 @@ Read before touching enemy/agent code, player body/movement/sounds, collision, s
   - `agent.Model <run id>` (before Play), `agent.Mobility static|walk|full` (live), `agent.Paused`, `agent.Debug`, `agent.ShowBean`, `agent.ShowHitboxes`, `agent.Tracers`
   - `gj.Enemies N`, `gj.SpawnRadius <cm>`, `gj.SpawnInterval <s>`, `gj.KillEnemies`, `gj.Tracers`
   - `gj.Map <graph|wfc> <level> [seed]` (rebuild the procedural map), `gj.MapInfo`, `gj.MapCheck`, `gj.MapSelfTest [delay] [quit]` (in-game map test; see MAPGEN.md §7)
+  - `gj.Music 0|1`, `gj.MusicVolume`, `gj.MusicTier -1|0|1|2`, `gj.MusicInfo`
+- Headless runs normally use `-nosound`, which turns the music off. To exercise it with no speakers, drop `-nosound` and set `SDL_AUDIODRIVER=dummy`.
 
 ## Architecture
 
@@ -38,6 +41,7 @@ Read before touching enemy/agent code, player body/movement/sounds, collision, s
 - `AGJRifle`: mirrors the enemy rifle using the vendored `FRifleFireState`/`CombatMath`, hitscan on the Weapon channel.
 - `AGJHUD`: canvas HUD.
 - `UGJEncounterSubsystem`: a placeholder Encounter Director that applies the contract's spawn rules. On a procedural map it probes tiles by walking distance from the player.
+- `UGJMusicSubsystem` + `UGJMusicSettings` (Project Settings > Game > GJ Music): adaptive music. Looping stems are locked to one Quartz clock and faded by intensity tier (Prowl / Hunt / Fight). It is presentation only, so agents never hear it. The stems come from `Tools/Music/clubsynth` (plain C++17).
 
 `Source/GameJam/MapGen/` is the procedural map generator (MAPGEN.md):
 - `GJLayoutGen.*` (namespace `GJMap`) is **plain C++17 with no Unreal types or exceptions**, so `Tools/MapGen` can build it with g++. Keep it that way. All randomness goes through `GJMap::FRng`, never `std::` distributions, so a `(family, level, seed)` tuple gives the same map everywhere.
