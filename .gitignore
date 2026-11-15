@@ -1,0 +1,15 @@
+# Unreal Engine generated folders (any depth: the project and its plugins)
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+
+# IDE and solution files (regenerated from the .uproject)
+.vs/
+*.sln
+*.suo
+*.VC.db
+*.VC.opendb
+
+# Local secrets and settings (e.g. Unreal-MCP local mode)
+.env
