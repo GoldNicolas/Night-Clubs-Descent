@@ -13,6 +13,7 @@ UGJGameSettings::UGJGameSettings()
 		FSoftObjectPath(TEXT("/Game/Characters/Rodin/Dancer_06/SKM_Dancer_06.SKM_Dancer_06")),
 	};
 	FleeAnimClass = FSoftClassPath(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed.ABP_Unarmed_C"));
+	CrowdAnchorClass = FSoftClassPath(TEXT("/Game/ClubMap/Blueprints/BP_CM_MirrorBall.BP_CM_MirrorBall_C"));
 
 	// The M16A1 pack's own gun animations (SK_M16_Skeleton); ignored for a gun model on another skeleton.
 	PlayerWeaponFireAnim = FSoftObjectPath(TEXT("/Game/M16A1/Animation/Anim_Shoot.Anim_Shoot"));

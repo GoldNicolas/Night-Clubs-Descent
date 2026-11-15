@@ -1,6 +1,7 @@
 #include "GJEncounterSubsystem.h"
 #include "AgentRuntime.h"
 #include "Common/FPSAgentSettings.h"
+#include "Engine/TargetPoint.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "EnemyBean.h"
@@ -129,6 +130,20 @@ bool UGJEncounterSubsystem::TrySpawnOne()
 		}
 	}
 
+	// On a hand-built level, spawn at its enemy spawn markers: TargetPoints tagged EnemySpawn, which the map places in every
+	// room at least 4 m apart (docs/MAP_DESIGN.md §3.5). The rules below still pick one >= 5 m from the player and out of view.
+	TArray<FVector> Markers;
+	if (MapTiles.IsEmpty())
+	{
+		for (TActorIterator<ATargetPoint> It(World); It; ++It)
+		{
+			if (It->ActorHasTag(TEXT("EnemySpawn")))
+			{
+				Markers.Add(It->GetActorLocation());
+			}
+		}
+	}
+
 	bool bFound = false;
 	float BestScore = -1.e9f;
 	FVector Best = FVector::ZeroVector;
@@ -141,6 +156,10 @@ bool UGJEncounterSubsystem::TrySpawnOne()
 			const FVector& Tile = MapTiles[Rng.RandRange(0, MapTiles.Num() - 1)];
 			Probe = Tile + FVector(Rng.FRandRange(-120.f, 120.f), Rng.FRandRange(-120.f, 120.f), 0.f);
 		}
+		else if (!Markers.IsEmpty())
+		{
+			Probe = Markers[Rng.RandRange(0, Markers.Num() - 1)];
+		}
 		else
 		{
 			const float A = Rng.FRandRange(0.f, 2.f * PI);
@@ -148,11 +167,15 @@ bool UGJEncounterSubsystem::TrySpawnOne()
 			Probe = FVector(Center.X + R * FMath::Cos(A), Center.Y + R * FMath::Sin(A), Center.Z);
 		}
 
-		// Floor below: the first walkable surface under the probe.
+		// Floor below: the first walkable surface under the probe. Level geometry only (WorldStatic / WorldDynamic, what the
+		// agents see): ceilings on the Ceiling object channel are skipped, so the probe lands on the floor under them, not the roof.
 		FHitResult Floor;
 		FCollisionQueryParams Q(SCENE_QUERY_STAT(GJSpawnFloor), false);
 		Q.AddIgnoredActor(Player);
-		if (!World->LineTraceSingleByChannel(Floor, Probe + FVector(0, 0, 600.f), Probe - FVector(0, 0, 1500.f), ECC_Visibility, Q)
+		FCollisionObjectQueryParams LevelGeometry;
+		LevelGeometry.AddObjectTypesToQuery(ECC_WorldStatic);
+		LevelGeometry.AddObjectTypesToQuery(ECC_WorldDynamic);
+		if (!World->LineTraceSingleByObjectType(Floor, Probe + FVector(0, 0, 600.f), Probe - FVector(0, 0, 1500.f), LevelGeometry, Q)
 			|| Floor.ImpactNormal.Z < 0.75f)
 		{
 			continue;

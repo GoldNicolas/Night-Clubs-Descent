@@ -50,6 +50,11 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category="Crowd", meta=(MetaClass="/Script/Engine.AnimInstance"))
 	FSoftClassPath FleeAnimClass;
 
+	/** The crowd dances around the first actor of this class in the level (the club's mirror ball in Lvl_ClubMap); on a
+	 *  level without one, around the PlayerStart. */
+	UPROPERTY(Config, EditAnywhere, Category="Crowd", meta=(MetaClass="/Script/Engine.Actor"))
+	FSoftClassPath CrowdAnchorClass;
+
 	/** Panic spreads: a calm dancer this close to a fleeing one starts running too. */
 	UPROPERTY(Config, EditAnywhere, Category="Crowd", meta=(Units="cm"))
 	float PanicSpreadRadiusCm = 500.f;

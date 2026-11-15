@@ -13,7 +13,7 @@
 namespace
 {
 	TAutoConsoleVariable<int32> CVarDancers(TEXT("gj.Dancers"), 10, TEXT("Dancers in the club crowd (0 = none). Changing it respawns the crowd."));
-	TAutoConsoleVariable<float> CVarDanceRadius(TEXT("gj.DanceRadius"), 1500.f, TEXT("Dancers spawn within this radius (cm) of the PlayerStart."));
+	TAutoConsoleVariable<float> CVarDanceRadius(TEXT("gj.DanceRadius"), 1000.f, TEXT("Dancers spawn within this radius (cm) of the dance-floor anchor (the club's mirror ball) or the PlayerStart."));
 
 	FAutoConsoleCommandWithWorld CmdClearDancers(TEXT("gj.ClearDancers"), TEXT("Remove every dancer (set gj.Dancers to spawn a new crowd)."),
 		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
@@ -138,8 +138,20 @@ int32 UGJCrowdSubsystem::SpawnDancers(int32 Count)
 	{
 		return 0;
 	}
+	// The crowd gathers around the level's dance-floor anchor (settings CrowdAnchorClass: the club's mirror ball), or the
+	// PlayerStart on a level without one.
 	FVector Center = Player->GetActorLocation();
-	for (TActorIterator<APlayerStart> It(World); It; ++It)
+	bool bAnchored = false;
+	if (UClass* AnchorClass = UGJGameSettings::Get().CrowdAnchorClass.TryLoadClass<AActor>())
+	{
+		for (TActorIterator<AActor> It(World, AnchorClass); It; ++It)
+		{
+			Center = It->GetActorLocation();
+			bAnchored = true;
+			break;
+		}
+	}
+	for (TActorIterator<APlayerStart> It(World); It && !bAnchored; ++It)
 	{
 		Center = It->GetActorLocation();
 		break;
@@ -154,10 +166,14 @@ int32 UGJCrowdSubsystem::SpawnDancers(int32 Count)
 		const float A = Rng.FRandRange(0.f, 2.f * PI);
 		const float R = Radius * FMath::Sqrt(Rng.FRand());
 		const FVector Probe(Center.X + R * FMath::Cos(A), Center.Y + R * FMath::Sin(A), Center.Z);
+		// Level geometry only (WorldStatic / WorldDynamic): ceilings on the Ceiling object channel are skipped, never the roof.
 		FHitResult Floor;
 		FCollisionQueryParams Q(SCENE_QUERY_STAT(GJDancerFloor), false);
 		Q.AddIgnoredActor(Player);
-		if (!World->LineTraceSingleByChannel(Floor, Probe + FVector(0, 0, 600.f), Probe - FVector(0, 0, 1500.f), ECC_Visibility, Q)
+		FCollisionObjectQueryParams LevelGeometry;
+		LevelGeometry.AddObjectTypesToQuery(ECC_WorldStatic);
+		LevelGeometry.AddObjectTypesToQuery(ECC_WorldDynamic);
+		if (!World->LineTraceSingleByObjectType(Floor, Probe + FVector(0, 0, 600.f), Probe - FVector(0, 0, 1500.f), LevelGeometry, Q)
 			|| Floor.ImpactNormal.Z < 0.75f)
 		{
 			continue;
