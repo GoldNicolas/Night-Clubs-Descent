@@ -4,7 +4,14 @@
 **Written:** November 15, 2026
 **Related:** [PLAN.md](../PLAN.md) (game plan) · [FPS-Agent-Constraints.md](../FPS-Agent-Constraints.md) (AI level rules, which are binding)
 
-This document describes the look, layout, and building rules for the club map, and the assets it needs. The map is designed by hand as **modular, grid-snapped rooms**. A teammate's procedural generator can then rearrange those rooms. Map design builds the rooms and one complete hand-assembled map. The generator is not part of this document.
+This document describes the look, layout, and building rules for the club map, and the assets it needs.
+
+**How the team splits the work.** Each teammate owns a separate workstream:
+- **Map design (this doc):** designs and fleshes out the club map until it's complete, in its own Unreal project, **`ClubMap/`** (see §8).
+- **Procedural generation:** the layout generator on branch `map-generation` (see `MAPGEN.md` there), inside the team's `GameJam` project.
+- **AI agent:** the enemy runtime in the `GameJam` project.
+
+The map is built as **modular, grid-snapped rooms** that follow the AI's level rules. That way it can later be moved into `GameJam`, and its look and rooms can be reused by the generator (§8.4). The generator itself is not part of this document.
 
 ---
 
@@ -85,6 +92,8 @@ The references show layered, multi-level clubs. We get that feeling **without a 
 ### 3.3 Ceilings
 Indoor ceilings confuse the AI's upward sensing. Following PLAN.md, ceilings and roofs go on a **custom collision object channel** that blocks pawns and the `Weapon` channel but is **ignored by AI perception rays**. This is only valid because nothing is walkable above them. Hanging decor (neon frames, trusses, pendants) has **no query collision**.
 
+`ClubMap` defines this channel as **`Ceiling` = `ECC_GameTraceChannel4`** (object channel, default response Block). The team's `GameJam` project doesn't have it yet. See §8.2 and open question Q5.
+
 ### 3.4 What blocks the AI's vision
 | Object | Collision |
 |---|---|
@@ -106,7 +115,7 @@ Each room provides **enemy spawn markers** at least **4 m** apart, on valid floo
 - **Each room is its own Level Instance** (a self-contained mini-level).
 - **Naming:** `LI_<Room>_<WxD tiles>_<Variant>`, for example `LI_DanceHall_8x8_A`.
 - **Origin:** the room's **south-west corner** on the grid. Floor top at **z = 0**. +X = east, +Y = north.
-- **Doorway sockets:** openings are **one tile wide (4 m) × 4 m tall**, **centered on a tile edge**. Main archways may be two tiles wide (8 m). Each module lists its sockets (edge + tile index) so the generator can connect rooms.
+- **Doorway sockets:** openings are **centered on a tile edge** and **4 m tall**. Default width is **two tiles (8 m)**, which matches the generator's WFC door socket (`MAPGEN.md` §2b). One-tile (4 m) openings are the minimum, for back-of-house only. Each module lists its sockets (edge + tile index) so rooms can be connected by hand or by the generator.
 - **Self-contained:** each module includes its own walls, ceiling (on the ceiling channel), lights, props, spawn markers, and a neon portal on each doorway.
 
 ### 4.2 Club modules (adapted from the blueprint)
@@ -184,16 +193,61 @@ These can be **re-imported into the team's UE 5.7.4 project for free**. 5.8 asse
 | ~~Q1~~ | ~~Engine version~~ **Resolved: the team uses UE 5.7.4** (C++ project, matching PLAN.md and the AI requirements). | All rooms are built in 5.7.4. Assets from the earlier 5.8 prototype are re-imported from source files, not migrated. |
 | Q2 | **Style blend:** stylized SIFU-like shapes + cyberpunk neon (proposed), or another direction? | Decides materials and prop style. |
 | Q3 | **Tunnels vs. club balance:** how much of the map is tunnel vs. club? | Decides the module count and map size. |
-| Q4 | **Module format** with the generator owner: Level Instances with doorway sockets as described in §4.1? | Lets hand-built rooms plug into the generator. |
-| Q5 | **Ceiling channel name** and setup (per the AI constraints §11.2). | Needed before building any indoor room. |
+| Q4 | **How the generator reuses this work** (with the generator owner): (a) the club's look replaces its grey boxes, (b) some rooms are built as 20 × 20 m WFC modules, or both. See §8.4. | Decides whether some rooms must be exactly 5 × 5 tiles with 8 m door sockets. |
+| Q5 | **Ceiling channel:** adopt `Ceiling` = `ECC_GameTraceChannel4` in `GameJam` too, and exclude it from agent perception queries (AI constraints §11.2). | `ClubMap` already uses it. The same slot and name in `GameJam` let the map move over with working ceilings. |
 | Q6 | **Crowd / NPC** source and style. | Affects the dance areas and the performance budget. |
 
 ---
 
 ## 7. Build order
-1. Resolve Q2, Q4, Q5. (Q1 settled: UE 5.7.4.)
+1. ~~Set up the `ClubMap` project~~ **Done:** UE 5.7.4, collision channels, 4 m grid, default level (§8). Still to resolve with the team: Q2, Q4, Q5.
 2. Create the room-kit template (grid, wall, ceiling channel, doorway socket, neon portal, spawn markers).
 3. Build the **Main Dance Hall** first, as the visual and gameplay benchmark. Review it with the team.
 4. Build the remaining club modules, then the tunnel modules.
 5. Assemble the full hand-built map. Playtest movement, sightlines, and cover heights.
 6. Hand the modules and socket list to the generator owner.
+
+---
+
+## 8. The `ClubMap` project and integration
+
+### 8.1 Project
+| Item | Value |
+|---|---|
+| Location in repo | `ClubMap/ClubMap.uproject` (branch `map-design`) |
+| Engine / type | UE **5.7.4**, **Blueprint** project (no C++ build needed to open it) |
+| Content root | Everything lives under **`/Game/ClubMap/`**: `Maps`, `Rooms`, `Materials` (+ `WorldAligned`), `Textures`, `Meshes`, `Props`, `Lighting`, `FX`, `Blueprints`, `Audio`. One root folder keeps the move into `GameJam` clean. |
+| Main level | `/Game/ClubMap/Maps/Lvl_ClubMap` (editor startup map and game default map) |
+| Editor grid | **400 cm (4 m)** snap option added and set as the active snap |
+| Editor-only helpers | `Editor_WorkLight` (a directional light, hidden in game) and `GridReference_Floor`. Both are in the `Setup` outliner folder and are removed or hidden for the final map. |
+| Rendering | Maximum quality preset (high-end features available). Low-end players use Unreal's scalability levels (Low…Epic) through an in-game graphics menu added later. The map must still read well with Lumen off (Low). `r.LumenScene.SurfaceCache.AtlasSize=6144` is set to avoid surface-cache oversubscription. |
+
+### 8.2 Collision channels (match `GameJam`)
+| Slot | Name | Kind | Default | Notes |
+|---|---|---|---|---|
+| `ECC_GameTraceChannel1` | Projectile | object | Block | Same as `GameJam` (template) |
+| `ECC_GameTraceChannel2` | **Weapon** | trace | Block | Same as `GameJam`. Hitscan for player and agents. |
+| `ECC_GameTraceChannel3` | **AgentPawn** | object | Block | Same as `GameJam`. Agent capsules. |
+| `ECC_GameTraceChannel4` | **Ceiling** | object | Block | **New, proposed for `GameJam` (Q5).** Ceilings and roofs. Blocks pawns and Weapon, ignored by agent perception. |
+
+Level geometry rules (§3.4): walls, cover, and counters are **WorldStatic** and block Weapon. Clutter, decals, and hanging decor have **no query collision**. Ceilings use the **Ceiling** object type.
+
+### 8.3 Moving the map into `GameJam`
+1. In `ClubMap`, right-click `/Game/ClubMap`, choose **Asset Actions → Migrate**, and select `GameJam/Content`. Unreal copies the level and every asset it references.
+2. In `GameJam`, the `Ceiling` channel must exist in the same slot (Q5) before the migrated level is opened.
+3. Open the level in `GameJam` and press Play. The player (`BP_GJPlayer`) and the agent encounter system work in any level there (CLAUDE.md, `GameJam` branch).
+4. Run the map checks (`gj.MapCheck`-style traces: Weapon and WorldStatic must agree at walls and cover).
+5. Merge through a pull request.
+
+A **trial migration** happens partway through building, so problems show up early.
+
+### 8.4 How the generator can reuse this work (Q4)
+The generator (`MAPGEN.md`) builds layouts on the same 4 m grid. It uses box collision plus **collision-free instanced meshes** for looks, currently grey placeholder cubes. Two compatible routes:
+- **(a) Art kit:** the club's materials, wall and floor styles, neon trims, ceilings (art only), and room dressing sets (dance hall, bar, VIP, back room, tunnel) replace its placeholder cubes. Dressing is placed by room size. This needs no change to the generator's layout logic.
+- **(b) WFC room modules:** selected rooms are built exactly to the generator's WFC module format (**5 × 5 tiles = 20 m**, each module owning its north row and west column as border, sockets `0` wall / `1` 8 m door / `2` open edge), so it can stitch them directly.
+
+The hand-built `Lvl_ClubMap` also stays usable as a fixed showcase level.
+
+### 8.5 Editor automation (for Claude Code)
+- `ClubMap` is controlled through the community **Unreal-MCP** plugin (the same one used for `GameJam`), installed with `npx unreal-mcp-cli install-plugin ./ClubMap --with-server` and set to **local-only mode** with `configure --mode Custom --host http://localhost:8080 --auth none`. The plugin folder (`ClubMap/Plugins/UnrealMCP/`), `.env`, and `.mcp.json` are git-ignored and machine-specific.
+- On Windows, compiling the plugin needs Visual Studio with the **.NET Framework 4.8.1 SDK** and the **MSVC v143 (14.44)** toolset.
