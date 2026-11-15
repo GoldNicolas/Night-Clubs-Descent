@@ -207,8 +207,11 @@ namespace
 		}
 	}
 
-	/** Start, facing and zones for a finished grid. Start is a random room tile (any floor tile if there are no rooms). */
-	void PlaceStartAndZones(FLayout& L, const std::vector<int>& RoomOf, FRng& Rng)
+	/**
+	 * Start, facing and zones for a finished grid. Start is ForcedStart when given, else a random room tile (any floor tile if
+	 * there are no rooms).
+	 */
+	void PlaceStartAndZones(FLayout& L, const std::vector<int>& RoomOf, FRng& Rng, int ForcedStart = -1)
 	{
 		std::vector<int> Floors;
 		std::vector<int> RoomFloors;
@@ -220,7 +223,7 @@ namespace
 		}
 		if (Floors.empty()) { return; }
 		const std::vector<int>& Pool = RoomFloors.empty() ? Floors : RoomFloors;
-		L.StartTile = Pool[static_cast<size_t>(Rng.Range(0, static_cast<int>(Pool.size()) - 1))];
+		L.StartTile = ForcedStart >= 0 ? ForcedStart : Pool[static_cast<size_t>(Rng.Range(0, static_cast<int>(Pool.size()) - 1))];
 
 		const std::vector<float> FromStart = WalkDistance(L, L.StartTile);
 		int Far = L.StartTile;
@@ -537,13 +540,14 @@ namespace
 
 const char* FamilyName(EFamily Family)
 {
-	return Family == EFamily::Graph ? "graph" : "wfc";
+	return Family == EFamily::Graph ? "graph" : Family == EFamily::Wfc ? "wfc" : "tunnels";
 }
 
 bool ParseFamily(const std::string& Name, EFamily& Out)
 {
 	if (Name == "graph") { Out = EFamily::Graph; return true; }
 	if (Name == "wfc") { Out = EFamily::Wfc; return true; }
+	if (Name == "tunnels") { Out = EFamily::Tunnels; return true; }
 	return false;
 }
 
@@ -580,92 +584,127 @@ int FLayout::TileAtCm(double X, double Y) const
 	return InBounds(R, C) ? Index(R, C) : -1;
 }
 
+namespace
+{
+	/**
+	 * Graph-first rooms and corridors. With EntryC >= 0 (tunnels) a 1-tile "room" sits just inside the south wall at that column,
+	 * so the corridor tree reaches it, and the wall tile south of it is opened as the mouth.
+	 */
+	bool BuildGraph(const FGraphParams& P, int EntryC, EFamily Family, uint32_t Seed, FLayout& Out)
+	{
+		FRng Rng(0x6A09E667F3BCC908ull ^ Seed ^ (Family == EFamily::Tunnels ? 0x3C6EF372FE94F82Bull : 0ull));
+		Out = FLayout();
+		Out.Family = Family;
+		Out.Seed = Seed;
+		const int Rows = std::max(8, P.Rows);
+		const int Cols = std::max(8, P.Cols);
+		const int Width = std::max(1, P.Corridor);
+		const int RoomMin = std::max(std::max(3, Width), P.RoomMin);
+		const int RoomMax = std::max(RoomMin, P.RoomMax);
+		InitGrid(Out, Rows, Cols);
+		std::vector<int> RoomOf(Out.Tiles.size(), -1);
+
+		// Rooms: no overlap, at least one wall tile between them and inside the outer wall.
+		std::vector<FRoom> Rooms;
+		int EntryRoom = -1;
+		if (EntryC >= 0)
+		{
+			EntryC = std::min(std::max(1, EntryC), Cols - 2);
+			EntryRoom = 0;
+			Rooms.push_back({ Rows - 2, EntryC, 1, 1 });
+			Out.Tiles[static_cast<size_t>(Out.Index(Rows - 2, EntryC))] = Floor;
+			RoomOf[static_cast<size_t>(Out.Index(Rows - 2, EntryC))] = EntryRoom;
+		}
+		const int WantRooms = P.NumRooms + (EntryRoom >= 0 ? 1 : 0);
+		for (int Attempt = 0; Attempt < P.NumRooms * 40 && static_cast<int>(Rooms.size()) < WantRooms; ++Attempt)
+		{
+			FRoom Room;
+			Room.NumRows = Rng.Range(RoomMin, RoomMax);
+			Room.NumCols = Rng.Range(RoomMin, RoomMax);
+			if (Room.NumRows > Rows - 2 || Room.NumCols > Cols - 2) { continue; }
+			Room.R0 = Rng.Range(1, Rows - 1 - Room.NumRows);
+			Room.C0 = Rng.Range(1, Cols - 1 - Room.NumCols);
+			const bool bOverlaps = std::any_of(Rooms.begin(), Rooms.end(), [&Room](const FRoom& O)
+			{
+				return Room.R0 <= O.R0 + O.NumRows && O.R0 <= Room.R0 + Room.NumRows
+					&& Room.C0 <= O.C0 + O.NumCols && O.C0 <= Room.C0 + Room.NumCols;
+			});
+			if (bOverlaps) { continue; }
+			const int Id = static_cast<int>(Rooms.size());
+			Rooms.push_back(Room);
+			FillRect(Out, Room.R0, Room.C0, Room.NumRows, Room.NumCols, Floor);
+			for (int R = Room.R0; R < Room.R0 + Room.NumRows; ++R)
+			{
+				for (int C = Room.C0; C < Room.C0 + Room.NumCols; ++C) { RoomOf[static_cast<size_t>(Out.Index(R, C))] = Id; }
+			}
+		}
+		const int NumRooms = static_cast<int>(Rooms.size());
+		Out.RoomsPlaced = NumRooms - (EntryRoom >= 0 ? 1 : 0);
+		if (Out.RoomsPlaced < 2) { return false; }
+
+		// Edges: spanning tree over centre distances, then the shortest non-tree edges as loops.
+		std::vector<std::tuple<int, int, int>> Edges; // distance, a, b
+		for (int A = 0; A < NumRooms; ++A)
+		{
+			for (int B = A + 1; B < NumRooms; ++B)
+			{
+				const FRoom& RA = Rooms[static_cast<size_t>(A)];
+				const FRoom& RB = Rooms[static_cast<size_t>(B)];
+				const int D = std::abs((2 * RA.R0 + RA.NumRows) - (2 * RB.R0 + RB.NumRows)) + std::abs((2 * RA.C0 + RA.NumCols) - (2 * RB.C0 + RB.NumCols));
+				Edges.emplace_back(D, A, B);
+			}
+		}
+		std::sort(Edges.begin(), Edges.end());
+		FDisjointSet Sets(NumRooms);
+		std::vector<std::pair<int, int>> Chosen;
+		std::vector<std::pair<int, int>> Spare;
+		for (const auto& [D, A, B] : Edges)
+		{
+			(void)D;
+			if (Sets.Union(A, B)) { Chosen.emplace_back(A, B); }
+			else { Spare.emplace_back(A, B); }
+		}
+		const int Loops = std::min(static_cast<int>(Spare.size()), static_cast<int>(std::lround(P.LoopFrac * P.NumRooms)));
+		for (int I = 0; I < Loops; ++I) { Chosen.push_back(Spare[static_cast<size_t>(I)]); }
+		Out.PlannedEdges = static_cast<int>(Chosen.size());
+
+		// Corridors.
+		std::vector<std::pair<int, int>> Path;
+		for (const auto& [A, B] : Chosen)
+		{
+			int SR, SC, GR, GC;
+			BandAnchor(Rooms[static_cast<size_t>(A)], Width, SR, SC);
+			BandAnchor(Rooms[static_cast<size_t>(B)], Width, GR, GC);
+			if (!RouteCorridor(Out, RoomOf, A, B, SR, SC, GR, GC, Width, Path)) { continue; }
+			for (const auto& [R, C] : Path) { FillRect(Out, R, C, Width, Width, Floor); }
+		}
+		EnsureOuterWall(Out);
+		if (KeepLargestRegion(Out) < 0.999) { return false; } // the tree connects every room; anything else is a bug
+
+		std::vector<uint8_t> IsRoom(Out.Tiles.size(), 0);
+		for (size_t I = 0; I < IsRoom.size(); ++I) { IsRoom[I] = RoomOf[I] >= 0 && RoomOf[I] != EntryRoom; }
+		AddCover(Out, IsRoom, P.Cover, P.HighFrac, Rng);
+		int Start = -1;
+		if (EntryRoom >= 0)
+		{
+			Start = Out.Index(Rows - 2, EntryC);
+			Out.MouthTile = Out.Index(Rows - 1, EntryC);
+			Out.Tiles[static_cast<size_t>(Out.MouthTile)] = Floor;
+		}
+		PlaceStartAndZones(Out, RoomOf, Rng, Start);
+		if (EntryRoom >= 0) { Out.StartYawDeg = 0.f; } // facing north, into the network
+		return Out.StartTile >= 0;
+	}
+}
+
 bool GenerateGraph(const FGraphParams& P, uint32_t Seed, FLayout& Out)
 {
-	FRng Rng(0x6A09E667F3BCC908ull ^ Seed);
-	Out = FLayout();
-	Out.Family = EFamily::Graph;
-	Out.Seed = Seed;
-	const int Rows = std::max(8, P.Rows);
-	const int Cols = std::max(8, P.Cols);
-	const int Width = std::max(1, P.Corridor);
-	const int RoomMin = std::max(std::max(3, Width), P.RoomMin);
-	const int RoomMax = std::max(RoomMin, P.RoomMax);
-	InitGrid(Out, Rows, Cols);
-	std::vector<int> RoomOf(Out.Tiles.size(), -1);
+	return BuildGraph(P, -1, EFamily::Graph, Seed, Out);
+}
 
-	// Rooms: no overlap, at least one wall tile between them and inside the outer wall.
-	std::vector<FRoom> Rooms;
-	for (int Attempt = 0; Attempt < P.NumRooms * 40 && static_cast<int>(Rooms.size()) < P.NumRooms; ++Attempt)
-	{
-		FRoom Room;
-		Room.NumRows = Rng.Range(RoomMin, RoomMax);
-		Room.NumCols = Rng.Range(RoomMin, RoomMax);
-		if (Room.NumRows > Rows - 2 || Room.NumCols > Cols - 2) { continue; }
-		Room.R0 = Rng.Range(1, Rows - 1 - Room.NumRows);
-		Room.C0 = Rng.Range(1, Cols - 1 - Room.NumCols);
-		const bool bOverlaps = std::any_of(Rooms.begin(), Rooms.end(), [&Room](const FRoom& O)
-		{
-			return Room.R0 <= O.R0 + O.NumRows && O.R0 <= Room.R0 + Room.NumRows
-				&& Room.C0 <= O.C0 + O.NumCols && O.C0 <= Room.C0 + Room.NumCols;
-		});
-		if (bOverlaps) { continue; }
-		const int Id = static_cast<int>(Rooms.size());
-		Rooms.push_back(Room);
-		FillRect(Out, Room.R0, Room.C0, Room.NumRows, Room.NumCols, Floor);
-		for (int R = Room.R0; R < Room.R0 + Room.NumRows; ++R)
-		{
-			for (int C = Room.C0; C < Room.C0 + Room.NumCols; ++C) { RoomOf[static_cast<size_t>(Out.Index(R, C))] = Id; }
-		}
-	}
-	const int NumRooms = static_cast<int>(Rooms.size());
-	Out.RoomsPlaced = NumRooms;
-	if (NumRooms < 2) { return false; }
-
-	// Edges: spanning tree over centre distances, then the shortest non-tree edges as loops.
-	std::vector<std::tuple<int, int, int>> Edges; // distance, a, b
-	for (int A = 0; A < NumRooms; ++A)
-	{
-		for (int B = A + 1; B < NumRooms; ++B)
-		{
-			const FRoom& RA = Rooms[static_cast<size_t>(A)];
-			const FRoom& RB = Rooms[static_cast<size_t>(B)];
-			const int D = std::abs((2 * RA.R0 + RA.NumRows) - (2 * RB.R0 + RB.NumRows)) + std::abs((2 * RA.C0 + RA.NumCols) - (2 * RB.C0 + RB.NumCols));
-			Edges.emplace_back(D, A, B);
-		}
-	}
-	std::sort(Edges.begin(), Edges.end());
-	FDisjointSet Sets(NumRooms);
-	std::vector<std::pair<int, int>> Chosen;
-	std::vector<std::pair<int, int>> Spare;
-	for (const auto& [D, A, B] : Edges)
-	{
-		(void)D;
-		if (Sets.Union(A, B)) { Chosen.emplace_back(A, B); }
-		else { Spare.emplace_back(A, B); }
-	}
-	const int Loops = std::min(static_cast<int>(Spare.size()), static_cast<int>(std::lround(P.LoopFrac * P.NumRooms)));
-	for (int I = 0; I < Loops; ++I) { Chosen.push_back(Spare[static_cast<size_t>(I)]); }
-	Out.PlannedEdges = static_cast<int>(Chosen.size());
-
-	// Corridors.
-	std::vector<std::pair<int, int>> Path;
-	for (const auto& [A, B] : Chosen)
-	{
-		int SR, SC, GR, GC;
-		BandAnchor(Rooms[static_cast<size_t>(A)], Width, SR, SC);
-		BandAnchor(Rooms[static_cast<size_t>(B)], Width, GR, GC);
-		if (!RouteCorridor(Out, RoomOf, A, B, SR, SC, GR, GC, Width, Path)) { continue; }
-		for (const auto& [R, C] : Path) { FillRect(Out, R, C, Width, Width, Floor); }
-	}
-	EnsureOuterWall(Out);
-	if (KeepLargestRegion(Out) < 0.999) { return false; } // the tree connects every room; anything else is a bug
-
-	std::vector<uint8_t> IsRoom(Out.Tiles.size(), 0);
-	for (size_t I = 0; I < IsRoom.size(); ++I) { IsRoom[I] = RoomOf[I] >= 0; }
-	AddCover(Out, IsRoom, P.Cover, P.HighFrac, Rng);
-	PlaceStartAndZones(Out, RoomOf, Rng);
-	return Out.StartTile >= 0;
+bool GenerateTunnels(const FGraphParams& P, int EntryC, uint32_t Seed, FLayout& Out)
+{
+	return BuildGraph(P, EntryC < 0 ? std::max(8, P.Cols) / 2 : EntryC, EFamily::Tunnels, Seed, Out);
 }
 
 bool GenerateWfc(const FWfcParams& P, uint32_t Seed, FLayout& Out)
@@ -815,9 +854,38 @@ FWfcParams WfcPreset(double Level)
 	return P;
 }
 
+FGraphParams TunnelPreset(double Level)
+{
+	// Chambers of 3-5 tiles (12-20 m) joined by 1-tile (4 m) drains; more chambers and loops (flanking routes) as the level rises.
+	//                      size chambers min max loops cover
+	static const double T[5][6] = {
+		{ 12,  3, 3, 4, 0.30, 0.04 },
+		{ 14,  4, 3, 4, 0.40, 0.06 },
+		{ 16,  5, 3, 5, 0.50, 0.08 },
+		{ 18,  7, 3, 5, 0.55, 0.10 },
+		{ 20,  9, 3, 5, 0.60, 0.12 },
+	};
+	int Lo, Hi;
+	double F;
+	SplitLevel(Level, Lo, Hi, F);
+	const double* A = T[Lo - 1];
+	const double* B = T[Hi - 1];
+	FGraphParams P;
+	P.Rows = P.Cols = LerpInt(static_cast<int>(A[0]), static_cast<int>(B[0]), F);
+	P.NumRooms = LerpInt(static_cast<int>(A[1]), static_cast<int>(B[1]), F);
+	P.RoomMin = LerpInt(static_cast<int>(A[2]), static_cast<int>(B[2]), F);
+	P.RoomMax = LerpInt(static_cast<int>(A[3]), static_cast<int>(B[3]), F);
+	P.Corridor = 1;
+	P.LoopFrac = Lerp(A[4], B[4], F);
+	P.Cover = Lerp(A[5], B[5], F);
+	return P;
+}
+
 bool MakeLayout(EFamily Family, double Level, uint32_t Seed, FLayout& Out)
 {
-	const bool bOk = Family == EFamily::Graph ? GenerateGraph(GraphPreset(Level), Seed, Out) : GenerateWfc(WfcPreset(Level), Seed, Out);
+	const bool bOk = Family == EFamily::Graph ? GenerateGraph(GraphPreset(Level), Seed, Out)
+		: Family == EFamily::Wfc ? GenerateWfc(WfcPreset(Level), Seed, Out)
+		: GenerateTunnels(TunnelPreset(Level), -1, Seed, Out);
 	Out.Level = Level;
 	return bOk;
 }
@@ -901,7 +969,9 @@ FMetrics ComputeMetrics(const FLayout& L)
 	M.CoverTiles = static_cast<int>(std::count(L.Tiles.begin(), L.Tiles.end(), LowCover) + std::count(L.Tiles.begin(), L.Tiles.end(), HighCover));
 	M.WallBoxes = static_cast<int>(MergeRects(L).size());
 	M.RoomsPlaced = L.RoomsPlaced;
-	M.PlannedLoops = L.Family == EFamily::Graph && L.RoomsPlaced > 0 ? L.PlannedEdges - L.RoomsPlaced + 1 : 0;
+	// Edges - nodes + 1; tunnels have one more node than rooms (the mouth's entry tile).
+	if (L.Family == EFamily::Graph && L.RoomsPlaced > 0) { M.PlannedLoops = L.PlannedEdges - L.RoomsPlaced + 1; }
+	if (L.Family == EFamily::Tunnels && L.RoomsPlaced > 0) { M.PlannedLoops = L.PlannedEdges - L.RoomsPlaced; }
 	return M;
 }
 
@@ -920,11 +990,15 @@ std::vector<std::string> Validate(const FLayout& L)
 		{
 			const bool bEdge = R == 0 || C == 0 || R == L.Rows - 1 || C == L.Cols - 1;
 			const char T = L.At(R, C);
-			if (bEdge && T != Wall) { Errors.push_back("outer ring is not all wall"); R = L.Rows; break; }
+			if (bEdge && T != Wall && L.Index(R, C) != L.MouthTile) { Errors.push_back("outer ring is not all wall"); R = L.Rows; break; }
 			if (T != Floor && T != Wall && T != LowCover && T != HighCover) { Errors.push_back(std::string("unknown tile '") + T + "'"); }
 		}
 	}
 	if (L.StartTile < 0 || L.Tiles[static_cast<size_t>(L.StartTile)] != Floor) { Errors.push_back("start is not on a floor tile"); return Errors; }
+	if (L.Family == EFamily::Tunnels && (L.MouthTile < 0 || L.MouthTile / L.Cols != L.Rows - 1 || L.Tiles[static_cast<size_t>(L.MouthTile)] != Floor))
+	{
+		Errors.push_back("tunnels: no mouth in the south wall");
+	}
 	const std::vector<float> Dist = WalkDistance(L, L.StartTile);
 	int Unreachable = 0, ZoneA = 0, ZoneD = 0, Floors = 0, Cover = 0;
 	for (size_t I = 0; I < N; ++I)

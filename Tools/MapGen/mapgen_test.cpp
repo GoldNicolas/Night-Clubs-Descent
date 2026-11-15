@@ -42,6 +42,7 @@ namespace
 				const size_t I = static_cast<size_t>(L.Index(R, C));
 				char T = L.Tiles[I];
 				if (static_cast<int>(I) == L.StartTile) { T = '@'; }
+				else if (static_cast<int>(I) == L.MouthTile) { T = 'M'; }
 				else if (T == Floor && L.Zones[I] != '.') { T = L.Zones[I]; }
 				Line += T;
 				Line += ' ';
@@ -53,9 +54,9 @@ namespace
 	int Stats(int Seeds)
 	{
 		int Failures = 0;
-		std::printf("%-6s %-3s %10s %16s %14s %14s %10s %8s %8s %6s %6s\n", "family", "lvl", "side m", "free m2", "farthest m",
+		std::printf("%-7s %-3s %10s %16s %14s %14s %10s %8s %8s %6s %6s\n", "family", "lvl", "side m", "free m2", "farthest m",
 			"boxes", "cover", "rooms", "loops", "ms", "skip");
-		for (const EFamily F : { EFamily::Graph, EFamily::Wfc })
+		for (const EFamily F : { EFamily::Graph, EFamily::Wfc, EFamily::Tunnels })
 		{
 			for (int Level = 1; Level <= 5; ++Level)
 			{
@@ -91,7 +92,7 @@ namespace
 					Loops.Add(M.PlannedLoops);
 					Ms.Add(std::chrono::duration<double, std::milli>(T1 - T0).count());
 				}
-				std::printf("%-6s L%-2d %10.0f %9.0f +- %4.0f %7.0f +- %3.0f %7.0f +- %3.0f %10.1f %8.1f %8.1f %6.2f %6d\n", FamilyName(F), Level,
+				std::printf("%-7s L%-2d %10.0f %9.0f +- %4.0f %7.0f +- %3.0f %7.0f +- %3.0f %10.1f %8.1f %8.1f %6.2f %6d\n", FamilyName(F), Level,
 					Side.Mean(), Free.Mean(), Free.Sd(), Far.Mean(), Far.Sd(), Boxes.Mean(), Boxes.Sd(), Cover.Mean(), Rooms.Mean(), Loops.Mean(),
 					Ms.Mean(), Skipped);
 				if (Skipped * 10 > Seeds) { ++Failures; std::printf("  TOO MANY SKIPPED SEEDS\n"); }
@@ -104,10 +105,10 @@ namespace
 	int Show(const std::string& Family, double Level, uint32_t Seed)
 	{
 		EFamily F;
-		if (!ParseFamily(Family, F)) { std::fprintf(stderr, "family must be graph or wfc\n"); return 2; }
+		if (!ParseFamily(Family, F)) { std::fprintf(stderr, "family must be graph, wfc or tunnels\n"); return 2; }
 		FLayout L;
 		if (!MakeLayout(F, Level, Seed, L)) { std::printf("generation failed for this seed (skip it)\n"); return 1; }
-		std::printf("%s   (@ start, a/d zones, # wall, l/h low/high cover)\n\n", Describe(L).c_str());
+		std::printf("%s   (@ start, M mouth, a/d zones, # wall, l/h low/high cover)\n\n", Describe(L).c_str());
 		PrintLayout(L);
 		const FMetrics M = ComputeMetrics(L);
 		std::printf("\nfree %.0f m2 (%.0f%%), farthest walk %.0f m, cover tiles %d, boxes %d, rooms %d, planned loops %d, wfc attempts %d, start yaw %.0f\n",
@@ -120,7 +121,7 @@ namespace
 
 	int Dump(const std::string& Dir, int Seeds)
 	{
-		for (const EFamily F : { EFamily::Graph, EFamily::Wfc })
+		for (const EFamily F : { EFamily::Graph, EFamily::Wfc, EFamily::Tunnels })
 		{
 			for (int Level = 1; Level <= 5; ++Level)
 			{

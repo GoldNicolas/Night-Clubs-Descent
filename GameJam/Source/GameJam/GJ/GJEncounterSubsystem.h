@@ -8,7 +8,8 @@ class AEnemyBean;
 
 /**
  * Testing-ground encounter (a stand-in for PLAN §10's Encounter Director). Keeps gj.Enemies enemies alive in any game world, with no map
- * changes: spawn points are sampled on the floor around the PlayerStart and follow the contract's spawn rules (§12.5, PLAN §10):
+ * changes: spawn points are sampled on the floor (a procedural map's reachable tiles; in a hand-built level its EnemySpawn-tagged
+ * markers plus any socket maps' tiles; otherwise around the PlayerStart) and follow the contract's spawn rules (§12.5, PLAN §10):
  * >= 5 m from the player (preferably out of view), >= 4 m from other agents, floor below and capsule clearance, within 40 m of the
  * player, standing, pitch 0, facing away from the player. Arrivals are staggered (gj.SpawnInterval) and grouped into waves.
  * Console: gj.Enemies N, gj.WaveSize N, gj.WaveBreak s, gj.SpawnRadius cm, gj.SpawnInterval s, gj.KillEnemies.
