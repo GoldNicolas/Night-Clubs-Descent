@@ -82,6 +82,21 @@ PALETTE = {
     "Art_Cyan":      ((0.0, 0.01, 0.02), 0.0, 0.40, (0.15, 0.70, 1.00), 0.10),
     "Mirror_Smoke":  ((0.25, 0.22, 0.20), 1.0, 0.02, None, 0),
     "LED_Red":       ((0, 0, 0), 0.0, 0.5, (1.00, 0.04, 0.04), 4),
+    "Felt_Green":    ((0.010, 0.090, 0.040), 0.0, 0.92, None, 0),
+    "Felt_Blue":     ((0.008, 0.040, 0.120), 0.0, 0.92, None, 0),
+    "Felt_Wine":     ((0.100, 0.008, 0.025), 0.0, 0.92, None, 0),
+    "Wood_Dark":     ((0.045, 0.022, 0.012), 0.0, 0.35, None, 0),
+    "Shade_Green":   ((0.015, 0.060, 0.030), 0.6, 0.30, None, 0),
+    "Ball_Yellow":   ((0.80, 0.55, 0.02), 0.0, 0.08, None, 0),
+    "Ball_Blue":     ((0.02, 0.06, 0.50), 0.0, 0.08, None, 0),
+    "Ball_Red":      ((0.60, 0.02, 0.02), 0.0, 0.08, None, 0),
+    "Ball_Purple":   ((0.20, 0.02, 0.35), 0.0, 0.08, None, 0),
+    "Ball_Orange":   ((0.80, 0.25, 0.02), 0.0, 0.08, None, 0),
+    "Ball_Green":    ((0.02, 0.30, 0.06), 0.0, 0.08, None, 0),
+    "Ball_Maroon":   ((0.25, 0.03, 0.02), 0.0, 0.08, None, 0),
+    "Ball_Black":    ((0.01, 0.01, 0.01), 0.0, 0.08, None, 0),
+    "Ball_White":    ((0.80, 0.78, 0.72), 0.0, 0.08, None, 0),
+    "Chalk_Blue":    ((0.05, 0.25, 0.60), 0.0, 0.90, None, 0),
     "Fabric_Black":  ((0.012, 0.012, 0.014), 0.0, 0.85, None, 0),
     "Fabric_Camel":  ((0.25, 0.15, 0.07), 0.0, 0.85, None, 0),
     "Fabric_Navy":   ((0.015, 0.02, 0.06), 0.0, 0.85, None, 0),
@@ -376,8 +391,9 @@ def room_shell(name, x0, y0, tiles_w, tiles_d, doors, wall_mat="Wall_Panel", flo
     return {"x0": ix0, "x1": ix1, "y0": iy0, "y1": iy1, "spans": spans, "folder": "Rooms/%s" % name}
 
 
-def spawn_marker(name, x, y):
-    a = _EAS.spawn_actor_from_class(unreal.TargetPoint, unreal.Vector(x, y, 50), unreal.Rotator(0, 0, 0))
+def spawn_marker(name, x, y, floor_z=0):
+    """Enemy spawn point 50 cm above the floor it stands on (floor_z for raised platforms)."""
+    a = _EAS.spawn_actor_from_class(unreal.TargetPoint, unreal.Vector(x, y, 50 + floor_z), unreal.Rotator(0, 0, 0))
     a.set_actor_label("EnemySpawn")
     a.set_folder_path("Rooms/%s/Spawns" % name)
     a.set_editor_property("tags", [unreal.Name("EnemySpawn")])

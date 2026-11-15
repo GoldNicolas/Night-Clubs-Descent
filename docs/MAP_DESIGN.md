@@ -123,10 +123,10 @@ Each room provides **enemy spawn markers** at least **4 m** apart, on valid floo
 |---|---|---|---|
 | Entry / Front Desk | 4×3 (built; 4 wide so the 8 m doors can be centered) | Desk, small bar, coat check, bouncer rope | Start / chokepoint |
 | Main Dance Hall | 8×8 | Sunken dance floor (ramped 1 m), raised DJ platform (45 cm), island bar (3×3, square with chamfered neon outline), perimeter seating | Large open fight, 32 m across |
-| Long Bar | 2×5 | Bar counter (low cover), bottle wall, stools | Lane with cover |
-| VIP Lounge | 4×5 | Raised 45 cm, curved booths (box collision), low neon walls, gold accents | Elevated-feel flank |
+| Long Bar | 2×5 (built; west of the Dance Hall) | Bar counter (low cover), bottle wall, stools | Lane with cover |
+| VIP Lounge | 4×5 (built; north of Billiards) | Raised 45 cm, curved booths (box collision), low neon walls, gold accents | Elevated-feel flank |
 | Private Room | 2×2 (×2 variants) | Booth, table, champagne, studded walls | Small clearable room |
-| Billiards | 3×4 | 2–3 pool tables (low cover), cue racks, pendant lights | Mid-size cover maze |
+| Billiards | 4×3 (built; east of the Dance Hall, N door to the VIP) | 2–3 pool tables (low cover), cue racks, pendant lights | Mid-size cover maze |
 | Sports Bar | 6×5 | Bar, table rows, TVs, small dance floor (2×2), stage (2×2, 45 cm) | Second large space |
 | Side Bar | 2×2 | Compact bar | Connector |
 | Restrooms | 2×3 (×2) | Stalls (high cover), sinks, mirrors | Tight close-quarters |
