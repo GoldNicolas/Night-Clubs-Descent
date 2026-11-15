@@ -16,6 +16,8 @@ SHELLS = {
     "PrivateB":  (0, 3600, 2, 2, {"S": [(1, 1)]}, {"wall_mat": "Velvet_Teal", "floor_mat": "Rug_Charcoal", "trim": "Neon_Gold", "portal": "Neon_Gold"}),
     "RestroomM": (800, 3600, 2, 3, {"S": [(1, 1)]}, {"wall_mat": "Tile_Black", "floor_mat": "Tile_Black", "trim": "Neon_Cyan", "portal": "Neon_Cyan"}),
     "RestroomW": (1600, 3600, 2, 3, {"S": [(1, 1)]}, {"wall_mat": "Tile_Black", "floor_mat": "Tile_Black", "trim": "Neon_Magenta", "portal": "Neon_Magenta"}),
+    "ClubThreshold": (1200, -2000, 2, 2, {"N": [(0, 1)], "S": [(1, 1)]},
+                      {"wall_mat": "Concrete_Wet", "floor_mat": "Floor_Wet", "trim": "Speaker_Black", "portal": "Neon_Magenta"}),
     "Storage":   (2400, 3600, 2, 3, {"S": [(1, 1)]}, {"wall_mat": "Wall_Concrete", "floor_mat": "Floor_Concrete", "trim": "Speaker_Black", "portal": "Speaker_Black"}),
 }
 

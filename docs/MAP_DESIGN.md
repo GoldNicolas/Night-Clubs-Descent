@@ -165,6 +165,25 @@ Target footprint: about **16 × 18 tiles (64 × 72 m)** for the club, plus tunne
 
 Main loop: Dance Hall → Long Bar → Service Corridor → VIP → Billiards → Dance Hall, with the Sports Bar off Billiards.
 
+**Outside the club: storm-drain tunnels and location sockets.** The club is one *location*; the drains around it are the connective tissue the generator plugs other locations into.
+
+| Module | Tiles | Position (tiles, x/y) | Notes |
+|---|---|---|---|
+| Club Threshold | 2×2 | 3..5 / -5..-3 | Outside the Entry's front opening: neon club sign, queue barriers, bouncer post |
+| T1 | 1×3 | 4..5 / -8..-5 | Threshold → Junction |
+| Junction | 3×3 | 3..6 / -11..-8 | Four-way chamber; ladder to a sealed manhole leaking cold light |
+| TW | 5×1 | -2..3 / -10..-9 | Junction → Camp |
+| Camp | 3×3 | -5..-2 / -11..-8 | Homeless camp (fire barrel, mattresses, tarp, cart) |
+| XW | 2×1 | -7..-5 / -10..-9 | **West socket** (gate at x = -6) |
+| TE | 7×1 | 6..13 / -10..-9 | **East socket** (gate at x = 12) |
+| TS | 1×4 | 4..5 / -15..-11 | **South socket** (gate at y = -14) |
+
+**Socket contract (for the procedural generator):**
+- Each exit has a `TargetPoint` labelled `LocationSocket_<West|East|South>`, tagged `LocationSocket` + its direction, at the gate centre (z = 1 m), rotated to face *out* of the club.
+- The gate actors are labelled `Gate_<Direction>_*`. To attach a location: delete the gate actors and the `Rooms/<Module>/Beyond` folder (the fog veil, black end wall and far lamp that fake the tunnel continuing), then place the next location so its own 1-tile (4 m wide, 4 m high) tunnel mouth lines up with the socket.
+- Tunnels are 1 tile wide, floor z = 0, ceiling 4 m; sockets sit on the 4 m grid, so WFC modules snap straight on.
+- The gate bars have gaps, so the AI can see and shoot through them but pawns can't pass. Until a location is attached, every route ends at a closed gate, never at void.
+
 ---
 
 ## 5. Asset list

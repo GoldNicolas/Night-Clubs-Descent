@@ -105,15 +105,9 @@ def shell():
 
 
 def front_doors():
-    """Closed double doors in the front opening (x 1200..2000) until the tunnels outside exist. Structure collision."""
+    """The front opening now leads out to the club threshold / storm drains (build_tunnels.py): just a rubber mat."""
     f = FE + "Doors"
-    for (a0, a1) in ((1205, 1598), (1602, 1995)):
-        box("Entry_FrontDoor", f, a0, a1, -1206, -1194, 0, 400, "Counter_Black")
-        box("Entry_DoorWindow", f, a0 + 150, a1 - 150, -1193, -1192, 220, 360, "Window_Street", DECOR)   # street light behind the glass
-        box("Entry_DoorBar", f, a0 + 40, a1 - 40, -1190, -1186, 105, 111, "Chrome", DECOR)
-        box("Entry_DoorKick", f, a0 + 10, a1 - 10, -1193, -1192, 0, 25, "Chrome", DECOR)
-    box("Entry_DoorSeam", f, 1598, 1602, -1192, -1191, 0, 400, "Neon_Cyan", DECOR)
-
+    box("Entry_FrontMat", f, 1220, 1980, -1178, -1120, 0.2, 1.2, "Fabric_Black", DECOR)
 
 def counter():
     """East counter: front desk (south) + small bar (north). Low cover 120 cm, closed behind."""
@@ -363,7 +357,6 @@ def lights():
     light("spot", "Entry_CoatLight", LE, (960, -880, 480), WARM, 300, 700, rot=(-90, 0, 0), outer_cone_angle=55.0, inner_cone_angle=25.0)
     light("rect", "Entry_CoatBackLight", LE, (840, -880, 210), (1, 0.6, 0.25), 12, 500, rot=(0, 0, 0), source_width=560.0, source_height=180.0)
     light("point", "Entry_LoungeLamp", LE, (1010, -275, 300), WARM, 45, 520)
-    light("rect", "Entry_StreetGlow", LE, (1600, -1185, 300), (0.35, 0.5, 1.0), 25, 700, rot=(0, 90, 0), source_width=700.0, source_height=150.0)
     light("point", "Entry_LoungeCandle", LE, (990, -265, 70), (1, 0.5, 0.18), 10, 300)
     light("point", "Entry_DoorGlow", LE, (1600, -1140, 380), CYAN, 25, 600)
 
