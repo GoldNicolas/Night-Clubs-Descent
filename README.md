@@ -6,7 +6,7 @@ A first-person run-and-gun set in an underground club. The enemies aren't script
 
 ## Play (Windows)
 
-1. Download **NightClubsDescent-Win64.zip** from [Releases](https://github.com/GoldNicolas/Game-Jam/releases/latest).
+1. Download **NightClubsDescent-Win64.zip** from [Releases](https://github.com/GoldNicolas/Night-Clubs-Descent/releases/latest).
 2. Unzip it anywhere, keeping the folder together.
 3. Run **GameJam.exe**.
 
@@ -40,7 +40,7 @@ You need Unreal Engine 5.7, Visual Studio 2022 with the workloads in `GameJam/.v
 
 ```
 git lfs install
-git clone https://github.com/GoldNicolas/Game-Jam.git
+git clone https://github.com/GoldNicolas/Night-Clubs-Descent.git
 ```
 
 - **Editor:** open `GameJam/GameJam.uproject`. The C++ compiles on the first open. The game starts on `/Game/GJ/Lvl_Club`.
