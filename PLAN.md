@@ -2,7 +2,7 @@
 
 **Status:** Initial planning draft; no game implementation is implied. Revised November 13, 2026 against FPS-Agent-Constraints v1.1. The revision adds stage gating, the FPS-Agent working rules, the map format, and concrete ragdoll, crowd and stealth rules.
 **Written:** November 13, 2026.
-**Game title:** Undecided.
+**Game title:** Night Clubs Descent (chosen 2026-11-15).
 
 This plan records the game concept, proposed architecture, development order, and open decisions discussed so far. **Confirmed** items come from the user's brief. **Proposed** items are recommendations to decide or validate during development. **Open** items are not settled requirements.
 
@@ -342,7 +342,6 @@ Add game-specific checks for ceilings, crowds, ragdolls, generated layouts, play
 
 | Topic | Proposed starting point | Still to choose |
 |---|---|---|
-| Game name | Working title only | Final name |
 | Player count | Single-player first | Whether multiplayer/co-op belongs in later scope |
 | Platform/input | PC development baseline | Release platforms, input devices, minimum hardware |
 | World duration | Finite generated map with endless encounters | Fixed arena, connected rooms, or streamed chunks |

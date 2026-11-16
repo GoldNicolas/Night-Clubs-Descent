@@ -60,7 +60,7 @@ Headless check:
 
 ## Open
 
-- **Title.** PLAN.md leaves the game's name open; the title is the placeholder `UNTITLED`. The tagline paraphrases the brief, and no lore is added.
+- **Title.** The game is **Night Clubs Descent** (`UGJFrontEndSettings::Title`, also the window title through `ProjectDisplayedTitle` in DefaultGame.ini). The tagline paraphrases the brief, and no lore is added.
 - **Kills are untested in-game**: the scripted runs didn't kill any enemies. They count `AEnemyBean::OnAnyEnemyDied` during the run.
 - **Run rules are open** (PLAN §13): a run ends at the first death, with no lives or checkpoints.
 - **Look.** It uses Slate's default font and flat colour panels in the club palette. A designed UMG menu can replace the Slate widgets without changing the run state.

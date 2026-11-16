@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-An Unreal Engine 5.7 C++ first-person run-and-gun game (game jam; title undecided) whose enemies are **trained RL policies from a separate private project, FPS-Agent**, run through UE's Learning Agents plugin (inference only). The UE project lives in `GameJam/` (`GameJam.uproject`); the repo root holds the design docs.
+**Night Clubs Descent** is an Unreal Engine 5.7 C++ first-person run-and-gun game (game jam) whose enemies are **trained RL policies from a separate private project, FPS-Agent**, run through UE's Learning Agents plugin (inference only). The UE project lives in `GameJam/` (`GameJam.uproject`); the repo root holds the design docs.
 
 Read before touching enemy/agent code, player body/movement/sounds, collision, spawning or level geometry:
 - [PLAN.md](PLAN.md): game design, proposed architecture, milestones, open decisions. Confirmed vs Proposed vs Open is deliberate; don't promote open ideas to requirements or invent lore.

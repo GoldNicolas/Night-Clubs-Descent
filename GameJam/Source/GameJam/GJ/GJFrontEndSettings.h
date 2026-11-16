@@ -24,7 +24,7 @@ public:
 
 	/** The game's name on the title screen and the intro card (placeholder: PLAN.md leaves the name open). */
 	UPROPERTY(Config, EditAnywhere, Category="Front End")
-	FText Title = NSLOCTEXT("GJFrontEnd", "Title", "UNTITLED");
+	FText Title = NSLOCTEXT("GJFrontEnd", "Title", "Night Clubs Descent");
 
 	/** One line under the title (from the brief: no new lore). */
 	UPROPERTY(Config, EditAnywhere, Category="Front End")
