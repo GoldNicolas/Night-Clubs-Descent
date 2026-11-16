@@ -22,3 +22,7 @@ DerivedDataCache/
 
 # Claude Code MCP config: holds this machine's absolute path to the local MCP server (regenerate with unreal-mcp-cli setup-mcp)
 /.mcp.json
+
+# Packaged builds (BuildGame.bat) and the cooker's file-order logs
+/Builds/
+GameJam/Build/Windows/FileOpenOrder/
