@@ -4,6 +4,12 @@
 
 A first-person run-and-gun set in an underground club. The enemies aren't scripted: they are reinforcement-learning agents trained in a separate project (FPS-Agent) and run in the game through Unreal's Learning Agents plugin. Made in Unreal Engine 5.7 for a game jam.
 
+## Gameplay
+
+[![Night Clubs Descent gameplay: firing through the club's security gates into the dance hall](docs/media/gameplay.jpg)](docs/media/gameplay.mp4)
+
+[Watch the gameplay video](docs/media/gameplay.mp4) (58 seconds: the title screen and intro, a run that ends on the results screen, and a restart).
+
 ## Play (Windows)
 
 1. Download **NightClubsDescent-Win64.zip** from [Releases](https://github.com/GoldNicolas/Night-Clubs-Descent/releases/latest).
