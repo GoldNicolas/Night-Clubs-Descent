@@ -6,6 +6,7 @@
 #include "EngineUtils.h"
 #include "EnemyBean.h"
 #include "GJMapGenerator.h"
+#include "GJRunSubsystem.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
@@ -75,7 +76,7 @@ void UGJEncounterSubsystem::Tick(float DeltaTime)
 {
 	UWorld* World = GetWorld();
 	const APawn* Player = UGameplayStatics::GetPlayerPawn(World, 0);
-	if (!Player)
+	if (!Player || !UGJRunSubsystem::IsPlaying(World)) // nothing spawns under the main menu or during the intro
 	{
 		return;
 	}

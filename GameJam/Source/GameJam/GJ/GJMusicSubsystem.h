@@ -36,9 +36,13 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override;
 	virtual bool IsTickable() const override;
+	virtual bool IsTickableWhenPaused() const override { return true; }
 
 	bool IsPlaying() const { return bPlaying; }
 	ETier GetTier() const { return Tier; }
+	/** Front end: hold the low-pass at or below this cutoff (Hz) while the menu is up; 0 = off. The music opens up smoothly. */
+	void SetMenuCutoff(float Hz) { MenuCutoffHz = Hz; }
+
 	/** One line for gj.MusicInfo and logs. */
 	FString GetStatusLine() const;
 
@@ -92,6 +96,7 @@ private:
 
 	float AppliedMaster = -1.f;
 	float CutoffHz = 20000.f;
+	float MenuCutoffHz = 0.f;
 	float AppliedCutoffHz = -1.f;
 	FRandomStream Rng;
 };

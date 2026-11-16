@@ -1,4 +1,5 @@
 #include "GJPlayerCharacter.h"
+#include "GJUserSettings.h"
 #include "AgentRuntime.h"
 #include "AgentTargetComponent.h"
 #include "Character/BeanHitboxLayout.h"
@@ -476,4 +477,10 @@ void AGJPlayerCharacter::Tick(float DeltaSeconds)
 		CurrentHP = FMath::Min(MaxHP, CurrentHP + HealthRegenPerSecond * DeltaSeconds);
 		OnDamaged.Broadcast(CurrentHP / MaxHP);
 	}
+}
+
+void AGJPlayerCharacter::DoAim(float Yaw, float Pitch)
+{
+	const float Sensitivity = FGJUserSettings::Get().MouseSensitivity;
+	Super::DoAim(Yaw * Sensitivity, Pitch * Sensitivity);
 }

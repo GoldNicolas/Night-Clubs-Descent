@@ -1,4 +1,5 @@
 #include "GJHUD.h"
+#include "GJRunSubsystem.h"
 #include "AgentTargetComponent.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Engine/Canvas.h"
@@ -22,7 +23,7 @@ void AGJHUD::DrawText(const FString& Text, float X, float Y, const FLinearColor&
 void AGJHUD::DrawHUD()
 {
 	Super::DrawHUD();
-	if (!Canvas || !PlayerOwner)
+	if (!Canvas || !PlayerOwner || UGJRunSubsystem::HidesGameHud(this)) // the title screen and intro own the screen
 	{
 		return;
 	}
@@ -87,7 +88,7 @@ void AGJHUD::DrawHUD()
 	DrawText(FString::Printf(TEXT("%s %3.0f cm/s  %s"), Mode, Speed, bLoud ? TEXT("LOUD") : TEXT("silent")),
 		CX - 120.f, Bottom, bLoud ? FLinearColor(1.f, 0.55f, 0.2f) : FLinearColor(0.6f, 0.9f, 0.6f), 1.2f);
 
-	if (Player->IsDead())
+	if (Player->IsDead() && !UGJRunSubsystem::EndsRunOnDeath(this)) // with the front end, death ends the run: results screen
 	{
 		DrawText(TEXT("YOU DIED - respawning"), CX - 150.f, CY - 40.f, FLinearColor(1.f, 0.25f, 0.2f), 2.f);
 	}

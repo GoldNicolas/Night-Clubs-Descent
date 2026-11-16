@@ -19,6 +19,7 @@ public class GameJam : ModuleRules
 			"GameplayStateTreeModule",
 			"UMG",
 			"Slate",
+			"SlateCore",
 			"AgentRuntime",
 			"AudioMixer",
 			"DeveloperSettings",

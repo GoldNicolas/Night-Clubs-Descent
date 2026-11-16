@@ -99,7 +99,9 @@ bool UGJMusicSubsystem::Start()
 			continue;
 		}
 		Audio->bIsMusic = true;
-		Audio->bIsUISound = false;
+		// A UI sound keeps playing while the game is paused: the stems stay on the beat clock (which never pauses), and the pause
+		// menu has music, muffled.
+		Audio->bIsUISound = true;
 		Audio->bAllowSpatialization = false;
 		Audio->SetLowPassFilterEnabled(true);
 		AudioComponents.Add(Audio);
@@ -201,7 +203,7 @@ void UGJMusicSubsystem::Tick(float DeltaTime)
 	}
 
 	const double Now = GetWorld()->GetTimeSeconds();
-	UpdateIntensity(Now);
+	if (!GetWorld()->IsPaused()) { UpdateIntensity(Now); }
 
 	const float SettingsVolume = UGJMusicSettings::Get().Volume;
 	const float CVarVolume = CVarMusicVolume.GetValueOnGameThread();
@@ -221,6 +223,7 @@ void UGJMusicSubsystem::Tick(float DeltaTime)
 			TargetCutoff = Settings.LowHealthCutoff * FMath::Pow(16000.f / Settings.LowHealthCutoff, T * T);
 		}
 	}
+	if (MenuCutoffHz > 0.f) { TargetCutoff = FMath::Min(TargetCutoff, MenuCutoffHz); } // the main menu muffles the club
 	CutoffHz = FMath::Exp(FMath::FInterpTo(FMath::Loge(CutoffHz), FMath::Loge(TargetCutoff), DeltaTime, 4.f));
 	ApplyLowPass(CutoffHz);
 }

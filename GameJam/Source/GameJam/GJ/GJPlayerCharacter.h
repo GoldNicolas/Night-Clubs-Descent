@@ -61,6 +61,11 @@ public:
 	virtual float TakeDamage(float Damage, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
 	virtual void OnStartCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
 	virtual void OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
+	/** Stops the template's respawn after death (the front end ends the run instead: results screen). */
+	void CancelRespawn() { GetWorldTimerManager().ClearTimer(RespawnTimer); }
+
+	/** Look input, scaled by the menu's mouse sensitivity (FGJUserSettings). */
+	virtual void DoAim(float Yaw, float Pitch) override;
 
 protected:
 	virtual void BeginPlay() override;
